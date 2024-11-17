@@ -1,3 +1,8 @@
+from deepqn import DeepQN
+import torch
+import torch.optim as optim
+
+
 # Agent class to hold the neural network and training logic
 class Agent:
     def __init__(self, input_channels, n_actions):
