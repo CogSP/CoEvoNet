@@ -9,9 +9,7 @@ class MultiAgentEnvironment:
         self.grid_size = grid_size
         self.agents = ["agent_1", "agent_2"]
         self.action_space = spaces.Discrete(5)  # 5 actions: Up, Down, Left, Right, Stay
-        self.observation_space = spaces.Box(
-            low=0, high=grid_size - 1, shape=(6,), dtype=np.int32
-        )  # [agent_pos, opponent_pos, point_pos]
+        self.observation_space = spaces.Box(low=0, high=grid_size - 1, shape=(6,), dtype=np.int32)  # [agent_pos, opponent_pos, point_pos]
         self.reset()
 
     def reset(self):

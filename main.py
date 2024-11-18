@@ -41,10 +41,10 @@ def main():
     # Train agent using the selected algorithm
     if args.algorithm == "GA":
         print("Training using Genetic Algorithm (GA)...")
-        genetic_algorithm_train(env, agent, hyperparams)
+        genetic_algorithm_train(env, agent, hyperparams, MAX_GENERATIONS)
     elif args.algorithm == "ES":
         print("Training using Evolution Strategies (ES)...")
-        evolution_strategy_train(env, agent, hyperparams)
+        evolution_strategy_train(env, agent, hyperparams, MAX_GENERATIONS)
     else:
         print("Unknown algorithm. Exiting.")
         return

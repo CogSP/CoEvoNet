@@ -1,5 +1,7 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class DeepQN(nn.Module):
     def __init__(self, input_channels, n_actions):
@@ -31,6 +33,37 @@ class DeepQN(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.output(x)
         return x
+
+    def get_weights(self):
+        return {k: v.clone() for k, v in self.state_dict().items()}
+    
+    def set_weights(self, new_weights):
+        """
+        Sets the weights of the network.
+
+        Args:
+            new_weights (dict): A dictionary containing new weights for the model, 
+                                where keys match the state_dict keys.
+        """
+        # Check that new_weights has the same keys as the current state_dict
+        current_state_dict = self.state_dict()
+        for key in current_state_dict.keys():
+            if key not in new_weights:
+                raise ValueError(f"Missing key in new_weights: {key}")
+            if new_weights[key].shape != current_state_dict[key].shape:
+                raise ValueError(f"Shape mismatch for key '{key}': expected {current_state_dict[key].shape}, got {new_weights[key].shape}")
+
+        # Load the new weights into the model
+        self.load_state_dict(new_weights)
+
+    
+    def determine_action(self, inputs):
+        """ Choose an action based on the observation. We do this by simply
+        selecting the action with the highest outputted value. """
+        actions = self.forward(inputs)
+        return [np.argmax(action_set) for action_set in actions]
+
+
 
 # Example usage:
 if __name__ == "__main__":

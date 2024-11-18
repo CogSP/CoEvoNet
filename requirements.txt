@@ -1,0 +1,4 @@
+numpy
+gymnasium
+argparse
+torch

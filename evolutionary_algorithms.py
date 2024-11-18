@@ -1,14 +1,21 @@
 import torch
 import numpy as np
+from deepqn import DeepQN
 
 ELITES_NUMBER = 5
 POPULATION_SIZE = 10
 MUTATION_POWER = 0.05
+LEARNING_RATE = 0.1
+TIMESTEPS_TOTAL = 0
+EPISODES_TOTAL = 0
+GENERATION = 0
+MAX_EVALUATION_STEPS = 500
+MAX_TIMESTEPS_PER_EPISODE = 500
+INPUT_SIZE = 6
+N_ACTIONS= 5
 
 
-
-def evaluate_current_weights(self, best_mutation_weights):
-    """ Send the weights to a number of workers and ask them to evaluate the weights. """
+def evaluate_current_weights(best_mutation_weights):
     evaluate_jobs = []
     for i in range(self.config['evaluation_games']):
         worker_id = i % self.config['num_workers']
@@ -19,9 +26,9 @@ def evaluate_current_weights(self, best_mutation_weights):
 
 def increment_metrics(self, results):
     """ Increment the total timesteps, episodes and generations. """
-    self.timesteps_total += sum([result['timesteps_total'] for result in results])
-    self.episodes_total += len(results)
-    self.generation += 1
+    TIMESTEPS_TOTAL += sum([result['timesteps_total'] for result in results])
+    EPISODES_TOTAL += len(results)
+    GENERATION += 1
 
 
 # Fitness function to evaluate an agent
@@ -39,36 +46,52 @@ def run_episode(env, agent):
     return total_reward
 
 
-def play_game(self, player1, player2, recorder=None, eval=False):
+
+def play_game(env, player1, player2, eval=False):
     """ Play a game using the weights of two players. """
-    obs = self.env.reset()
+    obs = env.reset()
     reward1 = 0
     reward2 = 0
-    # play and return the rewards and ts
-    return 
+
+    limit = MAX_EVALUATION_STEPS if eval else MAX_TIMESTEPS_PER_EPISODE
+    
+    for ts in range(limit):
+            
+        player1_action = player1.determine_action(obs)
+        obs, reward, done, info = env.step(player1_action)
+        reward1 += reward1[0]
+        player2_action = player2.determine_action(obs)
+        obs, reward, done, info = env.step(player2_action)
+        reward2 += reward2[1]
+
+        if done:
+            break
+
+    return reward1, reward2, ts
 
 
-def evaluate_mutations(self, elite, oponent, record=False, mutate_oponent=True):
-    """ Mutate the inputted weights and evaluate its performance against the inputted oponent. """
-    self.elite.set_weights(elite)
-    self.oponent.set_weights(oponent)
-    if mutate_oponent:
-        self.oponent.mutate(MUTATION_POWER)
-    elite_reward1, oponent_reward1, ts1 = self.play_game(
-        self.elite, self.oponent)
-    oponent_reward2, elite_reward2, ts2 = self.play_game(
-        self.oponent, self.elite)
+def evaluate_mutations(env, elite_weights, opponent_weights, mutate_opponent=True):
+    """ Mutate the inputted weights and evaluate its performance against the inputted opponent. """
+    elite = DeepQN(input_channels=INPUT_SIZE, n_actions=N_ACTIONS)
+    elite.set_weights(elite_weights)
+    opponent = DeepQN(input_channels=INPUT_SIZE, n_actions=N_ACTIONS)
+    opponent.set_weights(opponent_weights)
+
+    if mutate_opponent:
+        opponent.mutate(MUTATION_POWER)
+    elite_reward1, opponent_reward1, ts1 = play_game(env, elite, opponent)
+    opponent_reward2, elite_reward2, ts2 = play_game(env, opponent, elite)
     total_elite = elite_reward1 + elite_reward2
-    total_oponent = oponent_reward1 + oponent_reward2
+    total_opponent = opponent_reward1 + opponent_reward2
     return {
-        'oponent_weights': self.oponent.get_weights(),
-        'score_vs_elite': total_oponent,
+        'opponent_weights': opponent.get_weights(),
+        'score_vs_elite': total_opponent,
         'timesteps_total': ts1 + ts2,
-}
+    }
 
 
 
-def genetic_algorithm_train(env, agent, hyperparams):
+def genetic_algorithm_train(env, agent, hyperparams, MAX_GENERATIONS):
     
     """ Evolve the next generation using the Genetic Algorithm. This process
     consists of three steps:
@@ -82,26 +105,29 @@ def genetic_algorithm_train(env, agent, hyperparams):
     individual against a random policy and log the results. """
 
 
-    elites = [create num_elites networks]
+    elites = [DeepQN(input_channels=INPUT_SIZE, n_actions=N_ACTIONS) for _ in range(ELITES_NUMBER)]
 
-    # do things with VBN
+    # TODO: do things with VBN
 
     hof = [elites[i].get_weights() for i in
                 range(ELITES_NUMBER)]
     
-    for gen in range(MAX_GENERATION):
+    for gen in range(MAX_GENERATIONS):
+
+        results = []
         
         # Evaluate mutations vs first hof
+        # here mutations happen
         for i in range(POPULATION_SIZE):
             elite_id = i % ELITES_NUMBER
             should_mutate = (i > ELITES_NUMBER) # elitarism (?)
-            results += [evaluate_mutations.remote(hof[-1], elites[elite_id].get_weights(), mutate_oponent=should_mutate)]
+            results += [evaluate_mutations(env=env, elite_weights=hof[-1], opponent_weights=elites[elite_id].get_weights(), mutate_opponent=should_mutate)]
 
 
         # Evaluate vs other hof
         for j in range(len(hof) - 1):
             for i in range(POPULATION_SIZE):
-                results += [evaluate_mutations.remote(hof[-2 - j], results[i]['oponent_weights'], mutate_oponent=False)]
+                results += [evaluate_mutations.remote(env, elite_weights=hof[-2 - j], opponent_weights=results[i]['opponent_weights'], mutate_opponent=False)]
 
         rewards = []
         print(len(results))
@@ -113,7 +139,7 @@ def genetic_algorithm_train(env, agent, hyperparams):
             rewards.append(total_reward)
 
         best_mutation_id = np.argmax(rewards)
-        best_mutation_weights = results[best_mutation_id]['oponent_weights']
+        best_mutation_weights = results[best_mutation_id]['opponent_weights']
         print(f"Best mutation: {best_mutation_id} with reward {np.max(rewards)}")
 
         #self.try_save_winner(best_mutation_weights)
@@ -123,7 +149,7 @@ def genetic_algorithm_train(env, agent, hyperparams):
         print(f"TOP mutations: {new_elite_ids}")
         for i, elite in enumerate(elites):
             mutation_id = new_elite_ids[i]
-            elite.set_weights(results[mutation_id]['oponent_weights'])
+            elite.set_weights(results[mutation_id]['opponent_weights'])
 
         # Evaluate best mutation vs random agent
         evaluate_results = evaluate_current_weights(best_mutation_weights)
@@ -132,11 +158,11 @@ def genetic_algorithm_train(env, agent, hyperparams):
         train_rewards = [result['score_vs_elite'] for result in results]
         evaluate_videos = [result['video'] for result in evaluate_results]
 
-        self.increment_metrics(results)
+        increment_metrics(results)
 
         summary = dict(
-            timesteps_total=self.timesteps_total,
-            episodes_total=self.episodes_total,
+            timesteps_total=TIMESTEPS_TOTAL,
+            episodes_total=EPISODES_TOTAL,
             train_reward_min=np.min(train_rewards),
             train_reward_mean=np.mean(train_rewards),
             train_reward_med=np.median(train_rewards),
@@ -159,19 +185,7 @@ def genetic_algorithm_train(env, agent, hyperparams):
 
 
 
-
-    # Using ES for optimization
-    def evolution_strategy_train(env, agent, hyperparams):
-        weights = agent.get_weights()
-        for generation in range(MAX_GENERATIONS):
-            noise_samples = [np.random.normal(0, hyperparams.noise_std, size=weights['model'].shape) for _ in range(hyperparams.population_size)]
-            fitness_scores = []
-            
-            for noise in noise_samples:
-                perturbed_weights = weights + noise
-                agent.set_weights(perturbed_weights)
-                fitness = run_episode(env, agent)
-                fitness_scores.append(fitness)
-            
-            # Update weights with the best fitness scores
-            weights += LEARNING_RATE * np.mean(fitness_scores, axis=0)
+# Using ES for optimization
+def evolution_strategy_train(env, agent, hyperparams):
+    # TODO
+    return
