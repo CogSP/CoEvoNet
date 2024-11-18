@@ -3,8 +3,12 @@ import torch
 from agent import Agent
 from hyperparameters import Hyperparameters
 from evolutionary_algorithms import genetic_algorithm_train, evolution_strategy_train
-from multiagentenvironment import MultiAgentEnvironment # TODO: PETTINGZOO ENVIRONMENT TO TEST
+#from CustomGridEnv import CustomGridEnv # TODO: PETTINGZOO ENVIRONMENT TO TEST
 
+
+from pettingzoo.utils import parallel_to_aec
+
+MAX_TIMESTEPS_PER_EPISODE = 500
 
 def main():
     # Parse command-line arguments
@@ -21,9 +25,27 @@ def main():
                         help="Size of the Hall of Fame")
     args = parser.parse_args()
 
-    # Initialize environment
-    env = MultiAgentEnvironment()  #TODO: REPLACE WITH PETTINGZOO
-    input_channels = env.observation_space.shape[0]  # E.g., 4 for a stack of 4 frames
+    from pettingzoo.atari import boxing_v2
+
+    
+    env = boxing_v2.env(render_mode="human")
+    env.reset(seed=42)
+
+    for agent in env.agent_iter():
+        observation, reward, termination, truncation, info = env.last()
+
+        if termination or truncation:
+            action = None
+        else:
+            # this is where you would insert your policy
+            action = env.action_space(agent).sample()
+
+        env.step(action)
+    env.close()
+
+    """
+    input_channels = env.observation_spaces[env.possible_agents[0]].shape[0]  # Assuming same observation space for all agents
+    
     n_actions = env.action_space.n  # Number of possible actions
 
     # Initialize agent
@@ -50,6 +72,6 @@ def main():
         return
 
     print("Training completed.")
-
+    """
 if __name__ == "__main__":
     main()

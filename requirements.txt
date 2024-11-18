@@ -2,3 +2,7 @@ numpy
 gymnasium
 argparse
 torch
+pettingzoo
+pettingzoo[atari]
+AutoROM
+gym[atari]

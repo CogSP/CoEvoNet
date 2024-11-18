@@ -1,3 +1,5 @@
+NOTE: WE ARE USING PYTHON 3.9 VERSION
+
 - The DeepQN model (neural network) serves as the agent that interacts with the environment.
 
 

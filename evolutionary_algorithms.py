@@ -10,7 +10,6 @@ TIMESTEPS_TOTAL = 0
 EPISODES_TOTAL = 0
 GENERATION = 0
 MAX_EVALUATION_STEPS = 500
-MAX_TIMESTEPS_PER_EPISODE = 500
 INPUT_SIZE = 6
 N_ACTIONS= 5
 
@@ -48,26 +47,29 @@ def run_episode(env, agent):
 
 
 def play_game(env, player1, player2, eval=False):
-    """ Play a game using the weights of two players. """
-    obs = env.reset()
-    reward1 = 0
-    reward2 = 0
+    """Play a game using the weights of two players in the PettingZoo environment."""
+    env.reset()
+    rewards = {player1: 0, player2: 0}
+    timesteps = 0
 
-    limit = MAX_EVALUATION_STEPS if eval else MAX_TIMESTEPS_PER_EPISODE
-    
-    for ts in range(limit):
-            
-        player1_action = player1.determine_action(obs)
-        obs, reward, done, info = env.step(player1_action)
-        reward1 += reward1[0]
-        player2_action = player2.determine_action(obs)
-        obs, reward, done, info = env.step(player2_action)
-        reward2 += reward2[1]
+    for agent in env.agent_iter():
+        obs = env.observe(agent)
+        if agent == "agent_0":
+            action = player1.determine_action(obs)
+        elif agent == "agent_1":
+            action = player2.determine_action(obs)
+        else:
+            action = env.action_space(agent).sample()  # Random fallback action
 
-        if done:
+        env.step(action)
+        _, reward, done, _ = env.last()
+
+        rewards[agent] += reward
+        timesteps += 1
+        if all(env.terminated.values()) or timesteps >= MAX_EVALUATION_STEPS:
             break
 
-    return reward1, reward2, ts
+    return rewards["agent_0"], rewards["agent_1"], timesteps
 
 
 def evaluate_mutations(env, elite_weights, opponent_weights, mutate_opponent=True):
