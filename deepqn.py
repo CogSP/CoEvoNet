@@ -5,8 +5,8 @@ import numpy as np
 
 class DeepQN(nn.Module):
     def __init__(self, input_channels, n_actions):
+        
         super(DeepQN, self).__init__()
-
 
         self.layers = []
         
@@ -19,7 +19,7 @@ class DeepQN(nn.Module):
         self.layers.append(self.conv3)
         
         # Fully connected layer
-        self.fc1 = nn.Linear(64 * 7 * 7, 512)  # Adjust this based on input size
+        self.fc1 = nn.Linear(64 * 112 * 112, 512)  # Adjust this based on input size
         self.layers.append(self.fc1)
         self.output = nn.Linear(512, n_actions)
         self.layers.append(self.output)
@@ -34,16 +34,24 @@ class DeepQN(nn.Module):
         
 
     def forward(self, x):
+
         # Convolutional layers with VBN and ReLU
+        print(f"INPUT SIZE: { x.shape}")
         x = F.relu(self.vbn1(self.conv1(x)))
+        print(f"AFTER VBN1(CONV1): { x.shape}")
         x = F.relu(self.vbn2(self.conv2(x)))
+        print(f"AFTER VBN2(CONV2): { x.shape}")
         x = F.relu(self.vbn3(self.conv3(x)))
+        print(f"AFTER VBN3(CONV3): { x.shape}")
 
         # Flatten
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)  # Replace .view() with .reshape()
+        print(f"AFTER RESHAPING: { x.shape}")
+
 
         # Fully connected layers with ReLU
         x = F.relu(self.fc1(x))
+        print(f"AFTER FC1: { x.shape}")
         x = self.output(x)
         return x
     

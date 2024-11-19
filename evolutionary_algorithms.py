@@ -2,15 +2,15 @@ import torch
 import numpy as np
 from deepqn import DeepQN
 
-ELITES_NUMBER = 5
-POPULATION_SIZE = 10
+ELITES_NUMBER = 1
+POPULATION_SIZE = 1
 MUTATION_POWER = 0.05
 LEARNING_RATE = 0.1
 TIMESTEPS_TOTAL = 0
 EPISODES_TOTAL = 0
 GENERATION = 0
 MAX_EVALUATION_STEPS = 500
-INPUT_SIZE = 6
+INPUT_CHANNEL = 3
 N_ACTIONS= 5
 
 
@@ -54,15 +54,21 @@ def play_game(env, player1, player2, eval=False):
 
     for agent in env.agent_iter():
         obs = env.observe(agent)
-        if agent == "agent_0":
+        obs = torch.from_numpy(obs).float()  # Ensure it's of the correct dtype
+        obs = torch.unsqueeze(obs, dim=0)  # Shape becomes [1, 210, 160, 3] 
+        obs = obs.permute(0, 3, 1, 2)  # Convert from [N, H, W, C] to [N, C, H, W]
+
+        print(f"agent = {agent}")
+        if agent == "first_0":   
             action = player1.determine_action(obs)
+            print(f"action chosen = {action}")
         elif agent == "agent_1":
             action = player2.determine_action(obs)
         else:
             action = env.action_space(agent).sample()  # Random fallback action
 
         env.step(action)
-        _, reward, done, _ = env.last()
+        _, reward, _, _, _ = env.last()
 
         rewards[agent] += reward
         timesteps += 1
@@ -74,9 +80,9 @@ def play_game(env, player1, player2, eval=False):
 
 def evaluate_mutations(env, elite_weights, opponent_weights, mutate_opponent=True):
     """ Mutate the inputted weights and evaluate its performance against the inputted opponent. """
-    elite = DeepQN(input_channels=INPUT_SIZE, n_actions=N_ACTIONS)
+    elite = DeepQN(input_channels=INPUT_CHANNEL, n_actions=N_ACTIONS)
     elite.set_weights(elite_weights)
-    opponent = DeepQN(input_channels=INPUT_SIZE, n_actions=N_ACTIONS)
+    opponent = DeepQN(input_channels=INPUT_CHANNEL, n_actions=N_ACTIONS)
     opponent.set_weights(opponent_weights)
 
     if mutate_opponent:
@@ -107,13 +113,12 @@ def genetic_algorithm_train(env, agent, hyperparams, MAX_GENERATIONS):
     individual against a random policy and log the results. """
 
 
-    elites = [DeepQN(input_channels=INPUT_SIZE, n_actions=N_ACTIONS) for _ in range(ELITES_NUMBER)]
+    elites = [DeepQN(input_channels=INPUT_CHANNEL, n_actions=N_ACTIONS) for _ in range(ELITES_NUMBER)]
 
     # TODO: do things with VBN
 
-    hof = [elites[i].get_weights() for i in
-                range(ELITES_NUMBER)]
-    
+    hof = [elites[i].get_weights() for i in range(ELITES_NUMBER)]
+
     for gen in range(MAX_GENERATIONS):
 
         results = []
