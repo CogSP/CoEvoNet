@@ -12,6 +12,7 @@ MAX_TIMESTEPS_PER_EPISODE = 500
 TRAIN = True
 
 def main():
+    #test
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Train a DNN agent using GA or ES")
     parser.add_argument("--algorithm", type=str, choices=["GA", "ES"], default="GA", 
