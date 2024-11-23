@@ -11,18 +11,19 @@ EPISODES_TOTAL = 0
 GENERATION = 0
 MAX_EVALUATION_STEPS = 500
 INPUT_CHANNEL = 3
-N_ACTIONS= 5
+N_ACTIONS=None # not used 
 
 
 def evaluate_current_weights(best_mutation_weights):
     evaluate_jobs = []
-    for i in range(self.config['evaluation_games']):
-        worker_id = i % self.config['num_workers']
-        evaluate_jobs += [self._workers[worker_id].evaluate.remote(
+    for i in range(config['evaluation_games']):
+        worker_id = i % config['num_workers']
+        evaluate_jobs += [workers[worker_id].evaluate.remote(
             best_mutation_weights)]
     evaluate_results = ray.get(evaluate_jobs)
     return evaluate_results
 
+    
 def increment_metrics(self, results):
     """ Increment the total timesteps, episodes and generations. """
     TIMESTEPS_TOTAL += sum([result['timesteps_total'] for result in results])
@@ -30,10 +31,11 @@ def increment_metrics(self, results):
     GENERATION += 1
 
 
+"""
 # Fitness function to evaluate an agent
 def run_episode(env, agent):
     state = env.reset()
-    done = False
+ 
     total_reward = 0
     while not done:
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
@@ -43,14 +45,15 @@ def run_episode(env, agent):
         state = next_state
         total_reward += reward
     return total_reward
-
+"""
 
 
 def play_game(env, player1, player2, eval=False):
     """Play a game using the weights of two players in the PettingZoo environment."""
     env.reset()
-    rewards = {player1: 0, player2: 0}
+    rewards = {"first_0": 0, "second_0": 0}
     timesteps = 0
+    done = False
 
     for agent in env.agent_iter():
         obs = env.observe(agent)
@@ -58,31 +61,33 @@ def play_game(env, player1, player2, eval=False):
         obs = torch.unsqueeze(obs, dim=0)  # Shape becomes [1, 210, 160, 3] 
         obs = obs.permute(0, 3, 1, 2)  # Convert from [N, H, W, C] to [N, C, H, W]
 
-        print(f"agent = {agent}")
+        #print(f"agent = {agent}")
         if agent == "first_0":   
             action = player1.determine_action(obs)
-            print(f"action chosen = {action}")
-        elif agent == "agent_1":
+            #print(f"action chosen = {action}")
+        elif agent == "second_0":
             action = player2.determine_action(obs)
         else:
             action = env.action_space(agent).sample()  # Random fallback action
 
         env.step(action)
-        _, reward, _, _, _ = env.last()
+        _, reward, _, done, _ = env.last()
 
         rewards[agent] += reward
         timesteps += 1
-        if all(env.terminated.values()) or timesteps >= MAX_EVALUATION_STEPS:
+        #print(dir(env))
+    
+        if done or timesteps >= MAX_EVALUATION_STEPS:
             break
 
-    return rewards["agent_0"], rewards["agent_1"], timesteps
+    return rewards["first_0"], rewards["second_0"], timesteps
 
 
 def evaluate_mutations(env, elite_weights, opponent_weights, mutate_opponent=True):
     """ Mutate the inputted weights and evaluate its performance against the inputted opponent. """
-    elite = DeepQN(input_channels=INPUT_CHANNEL, n_actions=N_ACTIONS)
+    elite = DeepQN(input_channels=INPUT_CHANNEL, n_actions=env.action_space(env.agents[0]).n) # first_0 since the actions set is equal for both agents
     elite.set_weights(elite_weights)
-    opponent = DeepQN(input_channels=INPUT_CHANNEL, n_actions=N_ACTIONS)
+    opponent = DeepQN(input_channels=INPUT_CHANNEL, n_actions=env.action_space(env.agents[0]).n)
     opponent.set_weights(opponent_weights)
 
     if mutate_opponent:
@@ -112,8 +117,9 @@ def genetic_algorithm_train(env, agent, hyperparams, MAX_GENERATIONS):
     3. Evaluate the fittest
     individual against a random policy and log the results. """
 
+    print(f"agent = {agent}")
 
-    elites = [DeepQN(input_channels=INPUT_CHANNEL, n_actions=N_ACTIONS) for _ in range(ELITES_NUMBER)]
+    elites = [DeepQN(input_channels=INPUT_CHANNEL, n_actions=env.action_space(agent).n) for _ in range(ELITES_NUMBER)]
 
     # TODO: do things with VBN
 
@@ -137,7 +143,7 @@ def genetic_algorithm_train(env, agent, hyperparams, MAX_GENERATIONS):
                 results += [evaluate_mutations.remote(env, elite_weights=hof[-2 - j], opponent_weights=results[i]['opponent_weights'], mutate_opponent=False)]
 
         rewards = []
-        print(len(results))
+        #print(len(results))
         for i in range(POPULATION_SIZE):
             total_reward = 0
             for j in range(ELITES_NUMBER):
@@ -147,13 +153,13 @@ def genetic_algorithm_train(env, agent, hyperparams, MAX_GENERATIONS):
 
         best_mutation_id = np.argmax(rewards)
         best_mutation_weights = results[best_mutation_id]['opponent_weights']
-        print(f"Best mutation: {best_mutation_id} with reward {np.max(rewards)}")
+        #print(f"Best mutation: {best_mutation_id} with reward {np.max(rewards)}")
 
         #self.try_save_winner(best_mutation_weights)
         hof.append(best_mutation_weights)
 
         new_elite_ids = np.argsort(rewards)[-ELITES_NUMBER:]
-        print(f"TOP mutations: {new_elite_ids}")
+        #print(f"TOP mutations: {new_elite_ids}")
         for i, elite in enumerate(elites):
             mutation_id = new_elite_ids[i]
             elite.set_weights(results[mutation_id]['opponent_weights'])

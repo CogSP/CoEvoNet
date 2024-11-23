@@ -19,7 +19,7 @@ class DeepQN(nn.Module):
         self.layers.append(self.conv3)
         
         # Fully connected layer
-        self.fc1 = nn.Linear(64 * 112 * 112, 512)  # Adjust this based on input size
+        self.fc1 = nn.Linear(64 * 22 * 16, 512)  # Adjust this based on input size
         self.layers.append(self.fc1)
         self.output = nn.Linear(512, n_actions)
         self.layers.append(self.output)
@@ -36,22 +36,22 @@ class DeepQN(nn.Module):
     def forward(self, x):
 
         # Convolutional layers with VBN and ReLU
-        print(f"INPUT SIZE: { x.shape}")
+        #print(f"INPUT SIZE: { x.shape}")
         x = F.relu(self.vbn1(self.conv1(x)))
-        print(f"AFTER VBN1(CONV1): { x.shape}")
+        #print(f"AFTER VBN1(CONV1): { x.shape}")
         x = F.relu(self.vbn2(self.conv2(x)))
-        print(f"AFTER VBN2(CONV2): { x.shape}")
+        #print(f"AFTER VBN2(CONV2): { x.shape}")
         x = F.relu(self.vbn3(self.conv3(x)))
-        print(f"AFTER VBN3(CONV3): { x.shape}")
+        #print(f"AFTER VBN3(CONV3): { x.shape}")
 
         # Flatten
         x = x.reshape(x.size(0), -1)  # Replace .view() with .reshape()
-        print(f"AFTER RESHAPING: { x.shape}")
+        #print(f"AFTER RESHAPING: { x.shape}")
 
 
         # Fully connected layers with ReLU
         x = F.relu(self.fc1(x))
-        print(f"AFTER FC1: { x.shape}")
+        #print(f"AFTER FC1: { x.shape}")
         x = self.output(x)
         return x
     
@@ -59,7 +59,8 @@ class DeepQN(nn.Module):
         """ Choose an action based on the observation. We do this by simply
         selecting the action with the highest outputted value. """
         actions = self.forward(inputs)
-        return [np.argmax(action_set) for action_set in actions]
+        return [np.argmax(action_set.detach().numpy()) for action_set in actions][0]
+
 
 
     def get_weights(self):
@@ -127,20 +128,3 @@ class DeepQN(nn.Module):
 
         
 
-
-
-
-# Example usage:
-if __name__ == "__main__":
-    # Define input dimensions and number of actions
-    input_channels = 4  # For example, a stack of 4 frames
-    n_actions = 6       # Number of possible actions in the environment
-
-    # Initialize the network
-    dqn = DeepQN(input_channels, n_actions)
-
-    # Example input: batch of 32, 4-channel, 84x84 images
-    input_tensor = torch.randn(32, input_channels, 84, 84)
-    output = dqn(input_tensor)
-
-    print("Output shape:", output.shape)

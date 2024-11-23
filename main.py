@@ -1,9 +1,11 @@
 import argparse
+import importlib # to import dinamically the Atari Games
 import torch
 from agent import Agent
 from hyperparameters import Hyperparameters
 from evolutionary_algorithms import genetic_algorithm_train, evolution_strategy_train
 from pettingzoo.atari import boxing_v2
+from pettingzoo.atari import pong_v3
 
 
 MAX_TIMESTEPS_PER_EPISODE = 500
@@ -22,20 +24,24 @@ def main():
                         help="Noise standard deviation for weight mutation")
     parser.add_argument("--hof_size", type=int, default=10, 
                         help="Size of the Hall of Fame")
+    parser.add_argument("--atari_game", type=str, choices=["boxing_v2", "pong_v3"], default="pong_v3",
+                        help="Choose the Atari games to test with")
     args = parser.parse_args()
 
 
-    env = boxing_v2.env(render_mode="human")
+    atari_game_module = importlib.import_module(f"pettingzoo.atari.{args.atari_game}")
+    env = atari_game_module.env(render_mode="human")
     env.reset(seed=42)
 
     if TRAIN == True:
 
         agent = env.agents[0]
+        print(f"agent: {agent}")
         input_channels = env.observation_space(agent).shape[-1]
         num_actions = env.action_space(agent).n
         
         # Initialize agent
-        agent = Agent(input_channels, num_actions)
+        #agent = Agent(input_channels, num_actions)
 
         # Initialize hyperparameters
         hyperparams = Hyperparameters(algo=args.algorithm)
