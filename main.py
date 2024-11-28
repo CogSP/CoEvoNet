@@ -3,7 +3,8 @@ import importlib # to import dinamically the Atari Games
 import torch
 from agent import Agent
 from hyperparameters import Hyperparameters
-from evolutionary_algorithms import genetic_algorithm_train, evolution_strategy_train
+from genetic_algorithm import genetic_algorithm_train, evolution_strategy_train
+from evolutionary_stragety import evolution_strategy_train
 from pettingzoo.atari import boxing_v2
 from pettingzoo.atari import pong_v3
 
