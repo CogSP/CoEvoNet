@@ -6,3 +6,4 @@ pettingzoo
 pettingzoo[atari]
 AutoROM
 gym[atari]
+tqdm

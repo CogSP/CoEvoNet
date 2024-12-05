@@ -13,12 +13,11 @@ This approach treats the agent (DNN) as an evolving entity whose weights are opt
 
 # Running the program
 
-Run the script from the command line and specify the desired algorithm and hyperparameters:
-
+First, install all the dependencies running
 ```bash
-python main.py --algorithm GA --generations 50 --population 200 --noise_std 0.005
+./install.sh
 ```
-
+Run the script from the command line and specify the desired algorithm and hyperparameters. For instance:
 ```bash
-python main.py --algorithm ES --generations 50 --population 200 --noise_std 0.05
+python main.py --algorithm GA --generations 50 --population 200 --initial_mutation_power 0.05
 ```

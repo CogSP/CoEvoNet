@@ -61,7 +61,7 @@ def compute_weight_update(noises, rewards, learning_rate, mutation_power):
 
     return update
 
-def evolution_strategies_train(env, agent, max_generations):
+def evolution_strategy_train(env, agent, max_generations):
     """Train the agent using Evolution Strategies with Elitism and Hall of Fame."""
     global TIMESTEPS_TOTAL, EPISODES_TOTAL, GENERATION, hall_of_fame
 
