@@ -35,23 +35,12 @@ class DeepQN(nn.Module):
 
     def forward(self, x):
 
-        # Convolutional layers with VBN and ReLU
-        #print(f"INPUT SIZE: { x.shape}")
         x = F.relu(self.vbn1(self.conv1(x)))
-        #print(f"AFTER VBN1(CONV1): { x.shape}")
         x = F.relu(self.vbn2(self.conv2(x)))
-        #print(f"AFTER VBN2(CONV2): { x.shape}")
         x = F.relu(self.vbn3(self.conv3(x)))
-        #print(f"AFTER VBN3(CONV3): { x.shape}")
-
-        # Flatten
-        x = x.reshape(x.size(0), -1)  # Replace .view() with .reshape()
-        #print(f"AFTER RESHAPING: { x.shape}")
-
-
-        # Fully connected layers with ReLU
+        
+        x = x.reshape(x.size(0), -1)  
         x = F.relu(self.fc1(x))
-        #print(f"AFTER FC1: { x.shape}")
         x = self.output(x)
         return x
     

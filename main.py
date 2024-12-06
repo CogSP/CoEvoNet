@@ -2,8 +2,9 @@ import argparse
 import importlib # to import dinamically the Atari Games
 import torch
 from agent import Agent
-from genetic_algorithm import genetic_algorithm_train
+from genetic_algorithm import genetic_algorithm_train, play_game, RandomPolicy, load_hof
 from evolutionary_strategy import evolution_strategy_train
+import os
 
 
 def parse_arguments():
@@ -25,18 +26,28 @@ def parse_arguments():
                         help="Initial value for the mutation power, i.e. noise standard deviation for weight mutation")
     parser.add_argument("--learning_rate", type=float, default=0.1, 
                         help="Learning rate")
-    parser.add_argument("--max_timesteps_per_episode", type=int, default=3, 
+    parser.add_argument("--max_timesteps_per_episode", type=int, default=1000, 
                         help="Total timesteps per episode")
-    parser.add_argument("--max_evaluation_steps", type=int, default=3, 
+    parser.add_argument("--max_evaluation_steps", type=int, default=1000, 
                         help="Maximum steps for evaluation")
     parser.add_argument("--input_channels", type=int, default=3, 
                         help="Number of input channels for the observation")
-    parser.add_argument("--elites_number", type=int, default=5, 
+    parser.add_argument("--elites_number", type=int, default=2, 
                         help="Number of elites for each generation")          
     parser.add_argument("--debug", action="store_true", 
                         help="Enable debug mode for detailed logging")
     parser.add_argument("--train", action="store_true",
-                        help="Train the models or just test")
+                        help="Train the models")
+    parser.add_argument("--render", action="store_true",
+                        help="Enable rendering during training")
+    parser.add_argument("--test", action="store_true",
+                        help="Test the models")
+    parser.add_argument("--env_mode", type=str, choices=["AEC", "parallel"], default="AEC", 
+                        help="Choose the environment mode: AEC (Agent-Environment Cycle) or parallel")
+    parser.add_argument("--precision", type=str, choices=["float32", "float16"], default="float32",
+                        help="Specify the precision for computations: float32 or float16")
+    
+
 
     return parser.parse_args()
 
@@ -60,7 +71,11 @@ class Args:
         # clearly, these are not hyperparam, but it's easy to have everything inside an object
         self.debug = args.debug
         self.train = args.train
+        self.test = args.test
         self.input_channels = args.input_channels
+        self.render = args.render
+        self.env_mode = args.env_mode
+        self.precision = args.precision
 
 
     def print_attributes(self): 
@@ -71,13 +86,25 @@ class Args:
                 print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
+def initialize_env(args):
+    """Initialize the environment based on the chosen mode."""
+    atari_game_module = importlib.import_module(f"pettingzoo.atari.{args.atari_game}")
+    if args.env_mode == "AEC":
+        env = atari_game_module.env(render_mode="human" if args.render else None)
+    elif args.env_mode == "parallel":
+        env = atari_game_module.parallel_env(render_mode="human" if args.render else None)
+    else:
+        raise ValueError("Invalid environment mode. Choose either 'AEC' or 'parallel'.")
+    env.reset(seed=42)
+    return env
+
 def main():
     
     args = parse_arguments()
 
-    atari_game_module = importlib.import_module(f"pettingzoo.atari.{args.atari_game}")
-    env = atari_game_module.env()
-    env.reset(seed=42)
+    env = initialize_env(args)
+
+    hof = []
 
     if args.train:
 
@@ -95,7 +122,7 @@ def main():
 
         # Train agent using the selected algorithm
         if args.algorithm == "GA":
-            genetic_algorithm_train(env, agent, args)
+            hof = genetic_algorithm_train(env, agent, args)
         elif args.algorithm == "ES":
             evolution_strategy_train(env, agent, args)
         else:
@@ -103,20 +130,28 @@ def main():
             return
 
         print("Training completed.")
-
-
-    # now we can test
-    for agent in env.agent_iter():
-        observation, reward, termination, truncation, info = env.last()
-
-        if termination or truncation:
-            action = None
-        else:
-            # this is where you would insert your policy
-            action = env.action_space(agent).sample()
-
-        env.step(action)
     env.close()
+
+
+    if args.test:
+        
+        hof_file = os.path.join("GA_models/gens6_pop10_hof5_gamepong_v3_mut0.05_lr0.1", "hall_of_fame.pth")
+        hof = load_hof(hof_file)
+        env = initialize_env(args)  
+
+        best_model = Agent(args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+        best_model.set_weights(hof[-1])
+
+        total_rewards = 0
+        test_episodes = 10
+        for episode in range(10):
+            reward, _, timesteps = play_game(env=env, player1=best_model.model,
+                                        player2=RandomPolicy(env.action_space(env.agents[0]).n), 
+                                        args=args, eval=True)
+        total_rewards += reward
+
+        avg_reward = total_rewards / test_episodes
+        print(f"\n Average Reward of Best Model over {test_episodes} Episodes: {avg_reward}")
 
 
 if __name__ == "__main__":

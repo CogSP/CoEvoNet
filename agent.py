@@ -5,10 +5,23 @@ import torch.optim as optim
 
 # Agent class to hold the neural network and training logic
 class Agent:
-    def __init__(self, input_channels, n_actions):
+    def __init__(self, input_channels, n_actions, precision):
         self.model = DeepQN(input_channels, n_actions)
+        self.precision = precision
+        self.apply_precision
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
     
+        
+    def apply_precision(model, precision):
+        """Apply the specified precision to the model and default tensor type."""
+        if self.precision == "float16":
+                    self.model = self.model.half()
+        elif self.precision == "float32":
+            self.model = self.model.float()
+        else:
+            raise ValueError(f"Unsupported precision: {self.precision}")
+
+
     def clone(self):
         # Clone the model weights
         clone = Agent(input_channels=self.model.conv1.in_channels, 
