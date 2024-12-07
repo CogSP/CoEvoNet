@@ -37,12 +37,33 @@ class Agent:
             param.data += noise
 
     def mutate_ES(self, args):
-        """ Mutate the current weights by adding a normally distributed vector of
-        noise to the current weights. """
+        """
+        Mutates the weights of the model using a normal distribution.
+
+        Args:
+            args: Arguments containing the mutation power (scale of the mutation).
+
+        Returns:
+            dict: A dictionary of perturbations applied to the weights.
+        """
         weights = self.model.get_perturbable_weights()
-        noise = np.random.normal(loc=0.0, scale=args.mutation_power, size=weights.shape)
-        self.model.set_perturbable_weights(weights + noise)
+        noise = np.random.normal(loc=0.0, scale=args.mutation_power, size=len(weights))
+        self.model.set_perturbable_weights(weights + noise, args)
+        
+
+        """for key, value in weights.items():
+            # Generate noise with the same shape as the weight tensor
+            noise = np.random.normal(loc=0.0, scale=args.mutation_power, size=value.shape).astype(args.precision)
+            perturbations[key] = torch.tensor(noise, dtype=value.dtype, device=value.device)
+            # Add the noise to the weights
+            weights[key] += perturbations[key]
+
+        # Set the mutated weights back to the model
+        #print(f"weights = {weights.keys()}")
+        self.model.set_perturbable_weights(weights)"""
+
         return noise
+
 
     def set_weights(self, weights):
         # Set specific weights for the model (useful for ES)

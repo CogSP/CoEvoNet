@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from itertools import chain
 
 class DeepQN(nn.Module):
     def __init__(self, input_channels, n_actions):
@@ -51,9 +52,32 @@ class DeepQN(nn.Module):
         return [np.argmax(action_set.detach().numpy()) for action_set in actions][0]
 
 
+    def get_weights(self, layers=None):
+        """
+        Retrieves the weights of the network. (For GA)
 
-    def get_weights(self):
-        return {k: v.clone() for k, v in self.state_dict().items()}
+        Args:
+            layers (list, optional): A names list of layers from which to get the weights.
+                                     If None, retrieves weights from all layers.
+
+        Returns:
+            dict: A dictionary of weights for the specified layers (or all layers if None).
+        """
+        if layers is None:
+            # If no layers specified, return weights for all layers
+            return {k: v.clone() for k, v in self.state_dict().items()}
+        else:
+            # Filter the weights for the specified layer names
+            state_dict = self.state_dict()
+            selected_weights = {}
+            for key in state_dict:
+                # Match keys based on layer name prefixes
+                if any(key.startswith(layer) for layer in layers):
+                    selected_weights[key] = state_dict[key].clone()
+            
+            #print(f"selected_weights = {selected_weights.keys()}")
+            return selected_weights
+
     
     def set_weights(self, new_weights, layers=None):
         """
@@ -71,7 +95,7 @@ class DeepQN(nn.Module):
 
         if layers is not None:
             # Filter the keys to only include the specified layers
-            filtered_state_dict = {key: current_state_dict[key] for key in layers}
+            filtered_state_dict = {key: current_state_dict[key] for key in new_weights.keys()}
         else:
             # Use the full state_dict if no layers are specified
             filtered_state_dict = current_state_dict
@@ -89,22 +113,98 @@ class DeepQN(nn.Module):
         # Load the updated weights into the model
         self.load_state_dict(filtered_state_dict, strict=False)
 
-    def get_perturbable_layers(self):
-        """ Get all the perturbable layers of the network. This excludes the
-        BatchNorm layers. """
-        return [layer for layer in self.layers if
-                not isinstance(layer, nn.BatchNorm2d)]
 
     def get_perturbable_weights(self):
-        """ Get all the perturbable weights of the network. This excludes the
-        BatchNorm weights. """
-        return self.get_weights(self.get_perturbable_layers())
-    
+        return self.get_weights_ES(self.get_perturbable_layers())
 
-    def set_perturbable_weights(self, weights_to_set):
+
+    def get_weights_ES(self, layers=None):
+        """ Retrieve all the weights of the network. (For ES)"""
+        layers = layers if layers else self.layers
+        #print(f"layers = {layers}")
+
+        ws_and_bs = []
+        for layer in layers:
+            #print(f"weight = {layer.weight.detach().cpu().numpy()}")
+            weight =  layer.weight.detach().cpu().numpy()
+            bias = []
+            if layer.bias is not None:
+                #print(f"bias = {layer.bias.detach().cpu().numpy()}")
+                bias = layer.bias.detach().cpu().numpy()
+            tup = (weight, bias)
+            ws_and_bs.append(tup) 
+
+        layer_weights = chain(*ws_and_bs)
+        
+        flat_weights = []
+        for weights in layer_weights:
+            weights = weights.flatten()
+            flat_weights.append(weights)
+        
+        return np.concatenate(flat_weights)
+
+
+    def get_perturbable_layers(self):
+        """
+        Get the names of all perturbable layers in the network.
+
+        Returns:
+            list: A list of layer whose weights are perturbable.
+        """
+        layers = []
+        for name, layer in self.named_modules():
+            if name == "":
+                continue # skip the root module
+            if not isinstance(layer, nn.BatchNorm2d):
+                layers.append(layer)
+        #print(f"names = {names}")
+        return layers
+        
+
+    def set_weights_ES(self, flat_weights, args, layers=None):
+        """ Set all the weights of the network. (for ES)"""
+        # Variables to keep track of the position in flat_weights
+        i = 0
+
+        if args.precision == "float16":
+            dtype = torch.float16
+        else:
+            dtype = torch.float32
+
+        if layers is None:
+            layers = self.get_perturbable_layers()
+
+        for layer in layers:
+            # Initialize a list to store reshaped weights and biases
+            new_weights = []
+            
+            # Get the weights (and reshape)
+            weight_size = layer.weight.numel()  # Total number of elements in the weight tensor
+            reshaped_weight = flat_weights[i: i + weight_size].reshape(layer.weight.shape)
+
+            reshaped_weight = torch.tensor(reshaped_weight, dtype=dtype)
+            new_weights.append(reshaped_weight)
+            i += weight_size  # Move the index
+            
+            # Check if the layer has biases and process them
+            if layer.bias is not None:
+                bias_size = layer.bias.numel()  # Total number of elements in the bias tensor
+                reshaped_bias = flat_weights[i: i + bias_size].reshape(layer.bias.shape)
+                reshaped_bias = torch.tensor(reshaped_bias, dtype=dtype)
+                new_weights.append(reshaped_bias)
+                i += bias_size  # Move the index
+            
+            # Set the weights and biases in the layer
+            layer.weight.data.copy_(new_weights[0])  # Set weight
+            if layer.bias is not None:
+                layer.bias.data.copy_(new_weights[1])  # Set bias
+
+
+
+    def set_perturbable_weights(self, weights_to_set, args):
         """ Set all the perturbable weights of the network. This excludes setting
         the BatchNorm weights. """
-        self.set_weights(weights_to_set, self.get_perturbable_layers())
+        self.set_weights_ES(weights_to_set, args, self.get_perturbable_layers())
 
 
     def mutate(self, mutation_power):

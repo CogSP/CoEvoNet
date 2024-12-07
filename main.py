@@ -18,7 +18,7 @@ def parse_arguments():
                         help="Number of generations for the evolutionary process")
     parser.add_argument("--population", type=int, default=10, 
                         help="Population size for the evolutionary algorithm")
-    parser.add_argument("--hof_size", type=int, default=5, 
+    parser.add_argument("--hof_size", type=int, default=20, 
                         help="Size of the Hall of Fame")
     parser.add_argument("--atari_game", type=str, choices=["boxing_v2", "pong_v3"], default="pong_v3",
                         help="Choose the Atari games to test with")
@@ -46,6 +46,8 @@ def parse_arguments():
                         help="Choose the environment mode: AEC (Agent-Environment Cycle) or parallel")
     parser.add_argument("--precision", type=str, choices=["float32", "float16"], default="float32",
                         help="Specify the precision for computations: float32 or float16")
+    parser.add_argument("--save", action="store_true",
+                        help="Save the models")
     
 
 
@@ -76,6 +78,7 @@ class Args:
         self.render = args.render
         self.env_mode = args.env_mode
         self.precision = args.precision
+        self.save = args.save
 
 
     def print_attributes(self): 
@@ -124,7 +127,7 @@ def main():
         if args.algorithm == "GA":
             hof = genetic_algorithm_train(env, agent, args)
         elif args.algorithm == "ES":
-            evolution_strategy_train(env, agent, args)
+            agent = evolution_strategy_train(env, agent, args)
         else:
             print("Unknown algorithm. Exiting.")
             return

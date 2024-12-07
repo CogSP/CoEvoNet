@@ -8,6 +8,7 @@ import os
 import matplotlib.pyplot as plt
 
 
+
 def plot_rewards(rewards, file_path):
     """Plot rewards across generations and save the plot."""
     plt.figure(figsize=(10, 6))
@@ -22,7 +23,7 @@ def plot_rewards(rewards, file_path):
 
 def create_ga_model_dir(args):
     """Create a directory for saving models based on hyperparameters."""
-    dir_name = f"GA_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.atari_game}_mut{args.mutation_power}_lr{args.learning_rate}"
+    dir_name = f"GA_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.atari_game}_mut{args.mutation_power}"
     os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
@@ -306,10 +307,11 @@ def genetic_algorithm_train(env, agent, args):
                         print(f"\t reward: {results[-1]['score_vs_elite']}")
 
         rewards = []
+
         #print(len(results))
         for i in range(args.population):
             total_reward = 0
-            for j in range(args.elites_number):
+            for j in range(len(hof)):
                 reward_index = args.population * j + i
                 total_reward += results[reward_index]['score_vs_elite']
             rewards.append(total_reward)
@@ -322,8 +324,14 @@ def genetic_algorithm_train(env, agent, args):
         if args.debug:
             print(f"Best mutation: {best_mutation_id} with reward {np.max(rewards)}")
 
+
         #self.try_save_winner(best_mutation_weights)
-        hof.append(best_mutation_weights)
+        if len(hof) < args.hof_size:
+            hof.append(best_mutation_weights)
+        else:
+            hof.pop(0)
+            hof.append(best_mutation_weights)
+
 
 
         # Elitism retains the best agents from each generation, ensuring the algorithm doesn't lose progress:
@@ -335,8 +343,9 @@ def genetic_algorithm_train(env, agent, args):
 
 
         # Save the HoF and the elites at the end of each generation
-        save_hof(hof, hof_file)
-        save_elites(elites, elite_file)
+        if args.save:
+            save_hof(hof, hof_file)
+            save_elites(elites, elite_file)
 
         # Evaluate best mutation vs random agent
         evaluate_results = 0

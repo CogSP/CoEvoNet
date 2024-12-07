@@ -1,8 +1,11 @@
 import torch
 import numpy as np
 from deepqn import DeepQN
-from genetic_algorithm import play_game
+from genetic_algorithm import play_game, RandomPolicy, plot_rewards
 from agent import Agent
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import os
 
 POPULATION_SIZE = 50
 MUTATION_POWER = 0.05
@@ -12,23 +15,34 @@ EPISODES_TOTAL = 0
 GENERATION = 0
 MAX_EVALUATION_STEPS = 500
 INPUT_CHANNEL = 3
-N_ACTIONS = None  # Not used
 ELITES_NUMBER = 1  # Numero di soluzioni da mantenere come elite
 
-# Hall of Fame (memorizza le migliori soluzioni)
-hall_of_fame = []
 
-def evaluate_current_weights(weights, env):
+def create_es_model_dir(args):
+    """Create a directory for saving models based on hyperparameters."""
+    dir_name = f"ES_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.atari_game}_mut{args.mutation_power}_lr{args.learning_rate}"
+    os.makedirs(dir_name, exist_ok=True)
+    return dir_name
+
+def save_model(obj, file_path):
+    """Save any object to a file."""
+    torch.save(obj, file_path)
+
+def evaluate_current_weights(weights, env, args):
     """Evaluate the current weights against a random policy."""
     total_reward = 0
-    for _ in range(10):  # Evaluate over multiple episodes
-        agent = DeepQN(input_channels=INPUT_CHANNEL, n_actions=env.action_space.n)
-        agent.set_weights(weights)
-        total_reward += run_episode(env, agent)
+    for _ in tqdm(range(10), desc="Evaluating weights", leave=False):  # Evaluate over multiple episodes
+        agent = DeepQN(input_channels=INPUT_CHANNEL, n_actions=env.action_space(env.agents[0]).n)
+        agent.set_weights_ES(flat_weights=weights, args=args)
+        reward, _, ts = play_game(env=env, player1=agent,
+                                    player2=RandomPolicy(env.action_space(env.agents[0]).n), 
+                                    args=args, eval=True)
     return total_reward / 10
 
+
+"""
 def run_episode(env, agent):
-    """Run an episode and return the total reward."""
+    #Run an episode and return the total reward.
     state = env.reset()
     total_reward = 0
     done = False
@@ -41,17 +55,18 @@ def run_episode(env, agent):
         total_reward += reward
 
     return total_reward
+"""
 
-def mutate_weights(base_weights, mutation_power):
+def mutate_weights(env, base_weights, args):
     """Apply Gaussian noise to the weights."""
-    elite = Agent()
-    elite.set_weights(base_weights)
-    opponent = Agent()
-    opponent.set_weights(base_weights)
-    perturbations = opponent.mutate(args.mutation_power)
-
-    _, oponent_reward1, ts1 = play_game(elite, opponent)
-    oponent_reward2, _, ts2 = play_game(opponent, elite)
+    elite = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+    elite.model.set_weights_ES(flat_weights=base_weights, args=args)
+    opponent = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+    opponent.model.set_weights_ES(flat_weights=base_weights, args=args)
+    perturbations = opponent.mutate_ES(args)
+   
+    _, oponent_reward1, ts1 = play_game(env=env, player1=elite.model, player2=opponent.model, args=args)
+    oponent_reward2, _, ts2 = play_game(env=env, player1=opponent.model, player2=elite.model, args=args)
     
     total_reward = np.mean([oponent_reward1, oponent_reward2])
     noise = perturbations
@@ -59,85 +74,64 @@ def mutate_weights(base_weights, mutation_power):
     return total_reward, noise
 
 
-def compute_weight_update(noises, rewards, learning_rate, mutation_power):
+def compute_weight_update(noises, rewards, args):
     """Compute the weight update based on the rewards and noises."""
     mean_reward = np.mean(rewards)
     std_reward = np.std(rewards) if np.std(rewards) > 0 else 1.0
     normalized_rewards = (rewards - mean_reward) / std_reward
-    
-    weights_update = learning_rate / (len(noises) * mutation_power) * np.dot(np.array(noises).T, normalized_rewards)
+
+    weights_update = args.learning_rate / (len(noises) * args.mutation_power) * np.dot(np.array(noises).T, normalized_rewards)
 
     return weights_update
 
-def evolution_strategy_train(env, agent, max_generations):
+def evolution_strategy_train(env, agent, args):
     """Train the agent using Evolution Strategies with Elitism and Hall of Fame."""
-    global TIMESTEPS_TOTAL, EPISODES_TOTAL, GENERATION, hall_of_fame
 
-    base_weights = agent.get_weights()
+
+    # Initialize directories and variables for saving
+    model_dir = create_es_model_dir(args)
+    agent_file = os.path.join(model_dir, "agent.pth")
+    rewards_plot_file = os.path.join(model_dir, "rewards_plot.png")
+
+    agent = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+    base_weights = agent.model.get_perturbable_weights()
     elite_weights = None
     elite_reward = float('-inf')
 
     all_rewards = []
     evaluate_rewards = []
+    rewards_over_generations = []
 
-    for gen in range(max_generations):
+    for gen in tqdm(range(args.generations), desc="Training Generations"):
         noises = []
         rewards = []
 
         # Step 1: Generate population by mutating weights
-        for _ in range(POPULATION_SIZE):
-            total_reward, noise = mutate_weights(base_weights, MUTATION_POWER)
+        for _ in tqdm(range(args.population), desc=f"Generation {gen} - Mutating", leave=False):
+            total_reward, noise = mutate_weights(env, base_weights, args)
             noises.append(noise)
             rewards.append(total_reward)
 
-        """
-        DA TESTARE SE MIGLIORA !!
-        
-        # Step 2: Elitism - Retain the best individual
-        max_reward_idx = np.argmax(rewards)
-        if rewards[max_reward_idx] > elite_reward:
-            elite_reward = rewards[max_reward_idx]
-            elite_weights = {key: base_weights[key] + noises[max_reward_idx][key] for key in base_weights}
-        """
-
-        # Step 3: Compute weight update
-        weight_update = compute_weight_update(noises, rewards, LEARNING_RATE, MUTATION_POWER)
+      
+        weight_update = compute_weight_update(noises, rewards, args)
         base_weights = base_weights + weight_update
-        agent.set_weights(base_weights)
+        agent.model.set_weights_ES(flat_weights=base_weights, args=args)
 
-        # Step 4: Evaluate current weights
-        evaluation_reward = evaluate_current_weights(base_weights, env)
+        evaluation_reward = evaluate_current_weights(base_weights, env, args)
         evaluate_rewards.append(evaluation_reward)
+        rewards_over_generations.append(evaluation_reward)
 
-        # Update metrics
-        TIMESTEPS_TOTAL += sum(rewards)
-        EPISODES_TOTAL += POPULATION_SIZE
-        GENERATION += 1
 
         all_rewards.extend(rewards)
 
-        # Log results
-        print(f"Generation {gen + 1}:")
-        print(f"  Train Reward - Mean: {np.mean(rewards):.2f}, Max: {np.max(rewards):.2f}")
-        print(f"  Evaluation Reward: {evaluation_reward:.2f}")
-        print(f"  Best Reward in Hall of Fame: {hall_of_fame[0][0]:.2f}")
 
-    # Generate summary
-    summary = dict(
-        timesteps_total=TIMESTEPS_TOTAL,
-        episodes_total=EPISODES_TOTAL,
-        train_reward_min=np.min(all_rewards),
-        train_reward_mean=np.mean(all_rewards),
-        train_reward_max=np.max(all_rewards),
-        train_top_5_reward_avg=np.mean(np.sort(all_rewards)[-5:]),
-        evaluate_reward_min=np.min(evaluate_rewards),
-        evaluate_reward_mean=np.mean(evaluate_rewards),
-        evaluate_reward_med=np.median(evaluate_rewards),
-        evaluate_reward_max=np.max(evaluate_rewards),
-        avg_timesteps_train=TIMESTEPS_TOTAL / EPISODES_TOTAL,
-        avg_timesteps_evaluate=TIMESTEPS_TOTAL / max(len(evaluate_rewards), 1),
-        best_reward_hof=hall_of_fame[0][0],
-        best_weights_hof=hall_of_fame[0][1]
-    )
+        # Adaptive mutation power
+        args.mutation_power = max(0.01, args.mutation_power * 0.95)  # Reduce over generations
 
-    return summary
+        # Save Hall of Fame and plot rewards at each generation
+        save_model(agent, agent_file)
+        plot_rewards(rewards_over_generations, rewards_plot_file)
+
+
+
+    return agent
