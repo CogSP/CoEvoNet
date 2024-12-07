@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 from deepqn import DeepQN
+from genetic_algorithm import play_game
+from agent import Agent
 
 POPULATION_SIZE = 50
 MUTATION_POWER = 0.05
@@ -42,24 +44,30 @@ def run_episode(env, agent):
 
 def mutate_weights(base_weights, mutation_power):
     """Apply Gaussian noise to the weights."""
-    noise = {key: torch.normal(0, mutation_power, size=value.shape) for key, value in base_weights.items()}
-    mutated_weights = {key: base_weights[key] + noise[key] for key in base_weights}
-    return mutated_weights, noise
+    elite = Agent()
+    elite.set_weights(base_weights)
+    opponent = Agent()
+    opponent.set_weights(base_weights)
+    perturbations = opponent.mutate(args.mutation_power)
+
+    _, oponent_reward1, ts1 = play_game(elite, opponent)
+    oponent_reward2, _, ts2 = play_game(opponent, elite)
+    
+    total_reward = np.mean([oponent_reward1, oponent_reward2])
+    noise = perturbations
+
+    return total_reward, noise
+
 
 def compute_weight_update(noises, rewards, learning_rate, mutation_power):
     """Compute the weight update based on the rewards and noises."""
     mean_reward = np.mean(rewards)
     std_reward = np.std(rewards) if np.std(rewards) > 0 else 1.0
     normalized_rewards = (rewards - mean_reward) / std_reward
+    
+    weights_update = learning_rate / (len(noises) * mutation_power) * np.dot(np.array(noises).T, normalized_rewards)
 
-    update = {key: torch.zeros_like(value) for key, value in noises[0].items()}
-    for noise, reward in zip(noises, normalized_rewards):
-        for key in update:
-            update[key] += reward * noise[key]
-    for key in update:
-        update[key] = learning_rate / (len(noises) * mutation_power) * update[key]
-
-    return update
+    return weights_update
 
 def evolution_strategy_train(env, agent, max_generations):
     """Train the agent using Evolution Strategies with Elitism and Hall of Fame."""
@@ -78,26 +86,23 @@ def evolution_strategy_train(env, agent, max_generations):
 
         # Step 1: Generate population by mutating weights
         for _ in range(POPULATION_SIZE):
-            mutated_weights, noise = mutate_weights(base_weights, MUTATION_POWER)
-            agent.set_weights(mutated_weights)
-            reward = run_episode(env, agent)
+            total_reward, noise = mutate_weights(base_weights, MUTATION_POWER)
             noises.append(noise)
-            rewards.append(reward)
+            rewards.append(total_reward)
 
+        """
+        DA TESTARE SE MIGLIORA !!
+        
         # Step 2: Elitism - Retain the best individual
         max_reward_idx = np.argmax(rewards)
         if rewards[max_reward_idx] > elite_reward:
             elite_reward = rewards[max_reward_idx]
             elite_weights = {key: base_weights[key] + noises[max_reward_idx][key] for key in base_weights}
-
-        # Either here there is the problem of Hof vs Hof (i think)
-        # Update Hall of Fame
-        hall_of_fame.append((elite_reward, elite_weights))
-        hall_of_fame = sorted(hall_of_fame, key=lambda x: x[0], reverse=True)[:ELITES_NUMBER]
+        """
 
         # Step 3: Compute weight update
         weight_update = compute_weight_update(noises, rewards, LEARNING_RATE, MUTATION_POWER)
-        base_weights = {key: base_weights[key] + weight_update[key] for key in base_weights}
+        base_weights = base_weights + weight_update
         agent.set_weights(base_weights)
 
         # Step 4: Evaluate current weights

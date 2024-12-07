@@ -1,6 +1,7 @@
 from deepqn import DeepQN
 import torch
 import torch.optim as optim
+import numpy as np
 
 
 # Agent class to hold the neural network and training logic
@@ -34,6 +35,14 @@ class Agent:
         for param in self.model.parameters():
             noise = torch.normal(0, noise_std, size=param.size()).to(param.device)
             param.data += noise
+
+    def mutate_ES(self, args):
+        """ Mutate the current weights by adding a normally distributed vector of
+        noise to the current weights. """
+        weights = self.model.get_perturbable_weights()
+        noise = np.random.normal(loc=0.0, scale=args.mutation_power, size=weights.shape)
+        self.model.set_perturbable_weights(weights + noise)
+        return noise
 
     def set_weights(self, weights):
         # Set specific weights for the model (useful for ES)
