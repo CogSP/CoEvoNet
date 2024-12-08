@@ -1,4 +1,4 @@
 #!/bin/bash
 
-pip install -r requirements.txt
+python3.9 -m pip install -r requirements.txt
 AutoROM --accept-license
