@@ -211,7 +211,8 @@ class DeepQN(nn.Module):
         """ Mutate the current weights by adding a normally distributed vector of
         noise to the current weights. """
         weights = self.get_perturbable_weights()
-        noise = np.random.normal(loc=0.0, scale=mutation_power, size=weights.shape)
+        noise = np.random.normal(loc=0.0, scale=mutation_power, size=weights.shape).astype(np.float16 if self.precision=="float16" else np.float32)
+
         self.set_perturbable_weights(weights + noise)
         return noise
 

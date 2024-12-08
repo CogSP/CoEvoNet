@@ -9,21 +9,37 @@ import matplotlib.pyplot as plt
 
 
 
-def plot_rewards(rewards, file_path):
-    """Plot rewards across generations and save the plot."""
+def plot_rewards(rewards, file_path, window=10):
+    """
+    Plot rewards across generations and their moving average over a window.
+    
+    Args:
+        rewards (list): List of total rewards per generation.
+        file_path (str): Path to save the plot.
+        window (int): Window size for calculating the moving average.
+    """
     plt.figure(figsize=(10, 6))
-    plt.plot(rewards, marker='o')
+    
+    # Plot raw rewards
+    plt.plot(rewards, marker='o', label="Total Reward")
+    
+    # Calculate moving average
+    if len(rewards) >= window:
+        moving_avg = [np.mean(rewards[max(0, i - window + 1):i + 1]) for i in range(len(rewards))]
+        plt.plot(moving_avg, linestyle='-', label=f"Avg Reward (Last {window})")
+    
     plt.title("Reward Progression Over Generations")
     plt.xlabel("Generation")
-    plt.ylabel("Total Reward")
+    plt.ylabel("Reward")
     plt.grid(True)
+    plt.legend()
     plt.savefig(file_path)
     plt.close()
-    #print(f"Reward plot saved to {file_path}")
+
 
 def create_ga_model_dir(args):
     """Create a directory for saving models based on hyperparameters."""
-    dir_name = f"GA_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.atari_game}_mut{args.mutation_power}"
+    dir_name = f"GA_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.atari_game}_mut{args.mutation_power}_adaptive{args.adaptive}_tslimit{args.max_timesteps_per_episode}"
     os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
@@ -125,6 +141,7 @@ def evaluate_current_weights(best_mutation_weights, env, args):
 
 
 def play_game_parallel(env, agents, args, eval=False):
+    # TODO: add the possibility of having no timesteps_limit
     """Play a game using the weights of all agents simultaneously in the parallel environment."""
     env.reset()
     rewards = {agent: 0 for agent in env.agents}
@@ -174,22 +191,31 @@ def play_game(env, player1, player2, args, eval=False):
         elif agent == "second_0":
             action = player2.determine_action(obs)
         else:
-            action = env.action_space(agent).sample()  # Random fallback action
+            raise ValueError(f"Unknown Agent during play_game: {agent}")
+            #action = env.action_space(agent).sample()  # Random fallback action
 
         env.step(action)    
-        _, reward, _, done, _ = env.last()
+        _, reward, termination, truncation, _ = env.last()
+        
+        if args.debug:
+            if reward != 0:
+                print(f"reward {agent} = {reward}, termination = {termination}, truncation = {truncation}")
+                print(f"Action chosen by {agent}: {action}")
+
          
         rewards[agent] += reward
         timesteps += 1
-        #print(dir(env))
-    
-        if done or timesteps >= timesteps_limit:
 
-            if args.debug:
-                if done:
-                    print("\nsomeone won\n")
-                else:
-                    print("\ntime's out\n")
+    
+        if timesteps_limit is not None and timesteps >= timesteps_limit:
+            break
+
+        if termination or truncation:
+            # If the environment has only two agents (like Pong), 
+            # breaking immediately on termination or truncation is generally okay because once one agent is done, 
+            # the other agent’s turn will immediately follow (in the round-robin order). After both agents have 
+            # been processed, the episode ends naturally. For more complex environments with multiple agents, 
+            # handling termination per agent ensures consistency.
             break
 
     return rewards["first_0"], rewards["second_0"], timesteps
@@ -258,7 +284,6 @@ def genetic_algorithm_train(env, agent, args):
     will form the elites of the next population.
     3. Evaluate the fittest (more rewarded) individual against a random policy and log the results. """
 
-    
     # Load elites and HoF from disk if they exist
     # Otherwise, just initialize them
     model_dir = create_ga_model_dir(args)
@@ -368,10 +393,12 @@ def genetic_algorithm_train(env, agent, args):
         rewards_over_generations.append(evaluate_rewards)
 
         # adaptive mutation: TODO: PUT IN THE REPORT THAT THIS WAS NOT IN THE PAPER, IT WAS OUR IDEA
-        args.mutation_power = max(0.01, args.mutation_power * 0.95)  # Reduce over generations
+        if args.adaptive:
+            args.mutation_power = max(0.01, args.mutation_power * 0.95)  # Reduce over generations
 
         # Plot and save rewards progression
-        plot_rewards(rewards_over_generations, plot_file)
+        average_window = 5  # Define window for moving average (e.g., 5 or 10 generations)
+        plot_rewards(rewards_over_generations, plot_file, window=average_window)
 
     return hof
 

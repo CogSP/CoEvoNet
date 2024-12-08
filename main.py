@@ -26,9 +26,9 @@ def parse_arguments():
                         help="Initial value for the mutation power, i.e. noise standard deviation for weight mutation")
     parser.add_argument("--learning_rate", type=float, default=0.1, 
                         help="Learning rate")
-    parser.add_argument("--max_timesteps_per_episode", type=int, default=1000, 
+    parser.add_argument("--max_timesteps_per_episode", type=int, default=None, 
                         help="Total timesteps per episode")
-    parser.add_argument("--max_evaluation_steps", type=int, default=1000, 
+    parser.add_argument("--max_evaluation_steps", type=int, default=None, 
                         help="Maximum steps for evaluation")
     parser.add_argument("--input_channels", type=int, default=3, 
                         help="Number of input channels for the observation")
@@ -48,6 +48,8 @@ def parse_arguments():
                         help="Specify the precision for computations: float32 or float16")
     parser.add_argument("--save", action="store_true",
                         help="Save the models")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Enable adaptive mutation power, decreasing over time")
     
 
 
@@ -69,6 +71,7 @@ class Args:
         self.max_timesteps_per_episode = args.max_timesteps_per_episode
         self.max_evaluation_steps = args.max_evaluation_steps
         self.elites_number = args.elites_number
+        self.adaptive = args.adaptive
 
         # clearly, these are not hyperparam, but it's easy to have everything inside an object
         self.debug = args.debug
@@ -81,12 +84,14 @@ class Args:
         self.save = args.save
 
 
-    def print_attributes(self): 
+    def print_attributes(self, args): 
         # Print all attributes except `input_channel`
         attributes = vars(self)  # Get all attributes as a dictionary
         for attr, value in attributes.items():
             if attr != "input_channels":  # Skip `input_channel`
-                print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                if attr != "elites_number" or args.algorithm=="GA":
+                    if attr != "learning_rate" or args.algorithm=="ES":
+                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
 def initialize_env(args):
@@ -98,7 +103,7 @@ def initialize_env(args):
         env = atari_game_module.parallel_env(render_mode="human" if args.render else None)
     else:
         raise ValueError("Invalid environment mode. Choose either 'AEC' or 'parallel'.")
-    env.reset(seed=42)
+    env.reset(seed=1938214)
     return env
 
 def main():
@@ -119,7 +124,7 @@ def main():
 
         print("\nHyperparameters and Parameters:")
         args = Args(args)
-        args.print_attributes()
+        args.print_attributes(args)
         print("\n")
 
 
