@@ -38,10 +38,10 @@ class DeepQN(nn.Module):
 
     def forward(self, x):
         x = x.to(dtype=self.dtype)
+        x = x / 255
         x = F.relu(self.vbn1(self.conv1(x)))
         x = F.relu(self.vbn2(self.conv2(x)))
         x = F.relu(self.vbn3(self.conv3(x)))
-        
         x = x.reshape(x.size(0), -1)  
         x = F.relu(self.fc1(x))
         x = self.output(x)
