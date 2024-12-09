@@ -326,13 +326,13 @@ def genetic_algorithm_train(env, agent, args):
 
             for k in tqdm(range(args.hof_size), desc=f"Individual n.{i} vs HoF elite", leave=False):
                 
-                hof_elite_member = hof[k]
+                hof_elite_member = hof[len(hof)-1-k]
                 individual_reward1, hof_reward1, ts1 = play_game(env=env, player1=individual.model, player2=hof_elite_member.model, args=args)
                 hof_reward2, individual_reward2, ts2 = play_game(env=env, player1=hof_elite_member.model, player2=individual.model, args=args)
                 individual_reward += individual_reward1 + individual_reward2
 
                 if args.debug:
-                    print(f"\n\thof elite {k} vs individual {i}, individual got reward = {individual_reward1 + individual_reward2}")
+                    print(f"\n\thof elite {-k} vs individual {i}, individual got reward = {individual_reward1 + individual_reward2}")
             
             individual_fitness = individual_reward / args.hof_size
             
