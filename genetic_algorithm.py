@@ -372,6 +372,7 @@ def genetic_algorithm_train(env, agent, args):
             print(f"\nBest of the generation: {best_id}")
 
         hof.append(best_agent)
+        hof.pop(0)                  # for saturation of RAM
 
         # now we create the new population
         # the best id will be part of it
