@@ -7,7 +7,7 @@ import numpy as np
 # Agent class to hold the neural network and training logic
 class Agent:
     def __init__(self, input_channels, n_actions, precision):
-        self.model = DeepQN(input_channels, n_actions)
+        self.model = DeepQN(input_channels, n_actions, precision)
         self.precision = precision
         self.apply_precision
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)

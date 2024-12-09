@@ -6,6 +6,7 @@ from random import randint
 from tqdm import tqdm
 import os
 import matplotlib.pyplot as plt
+#import torchvision.transforms as transforms
 
 
 
@@ -73,10 +74,11 @@ def load_hof(file_path, env, args=None):
         ]
     return hof
 
-def load_elites(file_path, args=None, env=None):
+def load_elites(file_path, env=None, args=None):
     """ Load the elites from disk. """
+    elites_agents = []
     if os.path.exists(file_path):
-        elites = torch.load(file_path)
+        elites_agents = torch.load(file_path)
         print(f"Elites loaded from {file_path}")
     else:
         print(f"No elites found at {file_path}. Returning initial list of weights.")
@@ -95,9 +97,7 @@ def load_elites(file_path, args=None, env=None):
             else:
                 agent.model.float()
 
-        elites = [agent.model for agent in elites_agents]
-    
-    return elites
+    return elites_agents
 
 
 class RandomPolicy(object):
@@ -110,9 +110,8 @@ class RandomPolicy(object):
     def determine_action(self, input):
         return randint(0, self.number_actions - 1)
 
-
+"""
 def evaluate_current_weights_parallel(best_mutation_weights, env, args):
-    """Evaluate weights by playing against a random policy in parallel mode."""
     # Initialize agents
     agents = {}
     for i, agent_id in enumerate(env.agents):
@@ -131,19 +130,23 @@ def evaluate_current_weights_parallel(best_mutation_weights, env, args):
         'total_reward': rewards[elite_id],
         'timesteps_total': timesteps,
     }
+"""
 
 
-def evaluate_current_weights(best_mutation, env, args):
-    """ Evaluate weights by playing against a random policy. """
-    elite = Agent(3, env.action_space(env.agents[0]).n, precision=args.precision)
-    elite.set_weights(best_mutation.get_weights())
-    reward, _, ts = play_game(env=env, player1=elite.model,
-                                    player2=RandomPolicy(env.action_space(env.agents[0]).n), 
+def evaluate_current_weights(best_agent, env, args):
+    """Evaluate the current weights against a random policy."""
+    total_reward = 0
+    for i in tqdm(range(5), desc="Evaluating best model against 5 dummies", leave=False):  
+        reward, _, ts = play_game(env=env, player1=best_agent.model,
+                                    player2=RandomPolicy(env.action_space(env.agents[0]).n),
                                     args=args, eval=True)
-    return {
-        'total_reward': reward,
-        'timesteps_total': ts,
-    }
+        total_reward += reward
+
+        if args.debug:
+            print(f"\n\t evaluation number {i}, reward = {reward} ")
+    
+    return total_reward / 5
+
 
 
 def play_game_parallel(env, agents, args, eval=False):
@@ -186,34 +189,39 @@ def play_game(env, player1, player2, args, eval=False):
 
     for agent in env.agent_iter():
         obs = env.observe(agent)
-        obs = torch.from_numpy(obs).float()  # Ensure it's of the correct dtype
-        obs = torch.unsqueeze(obs, dim=0)  # Shape becomes [1, 210, 160, 3] 
-        obs = obs.permute(0, 3, 1, 2)  # Convert from [N, H, W, C] to [N, C, H, W]
-
-        #print(f"agent = {agent}")
+        obs = torch.from_numpy(obs) # Ensure it's of the correct dtype
+        if args.precision == "float16":
+            obs = obs.to(torch.float16)
+        else:
+            obs = obs.to(torch.float32)
+        obs = obs.permute(2, 0, 1)   # N x W x H (6 x 84 x 84)
+        obs = obs.unsqueeze(0) # 1 x N x W x H
         if agent == "first_0":   
             action = player1.determine_action(obs)
-            #print(f"action chosen = {action}")
         elif agent == "second_0":
-            action = player2.determine_action(obs)
+            action = player2.determine_action(obs)  
         else:
             raise ValueError(f"Unknown Agent during play_game: {agent}")
-            #action = env.action_space(agent).sample()  # Random fallback action
-
         env.step(action)    
         _, reward, termination, truncation, _ = env.last()
-        
+
+        """
         if args.debug:
             if reward != 0:
-                print(f"reward {agent} = {reward}, termination = {termination}, truncation = {truncation}")
-                print(f"Action chosen by {agent}: {action}")
+                print(f"\nagent = {agent}, reward {reward}, termination = {termination}, truncation = {truncation}")
+        """
 
-         
         rewards[agent] += reward
         timesteps += 1
 
     
         if timesteps_limit is not None and timesteps >= timesteps_limit:
+            
+            """
+            if args.debug:
+                print(f"timesteps limit imposed reached!")
+            """
+
             break
 
         if termination or truncation:
@@ -222,6 +230,12 @@ def play_game(env, player1, player2, args, eval=False):
             # the other agent’s turn will immediately follow (in the round-robin order). After both agents have 
             # been processed, the episode ends naturally. For more complex environments with multiple agents, 
             # handling termination per agent ensures consistency.
+            
+            """
+            if args.debug:
+                print(f"termination or truncation is true")
+            """
+
             break
 
     return rewards["first_0"], rewards["second_0"], timesteps
@@ -258,6 +272,8 @@ def evaluate_mutations_parallel(env, elite_weights, opponent_weights, args, muta
 def mutate_elites(elites, args):
     mutated_elites_list = []
     for i in range(args.population-1):
+        if args.debug:
+            print(f"\n\t mutate elite {i % args.elites_number}")
         elite = elites[i % args.elites_number]
         mutated_elite = elite.clone(args)
         mutated_elite.mutate(args.mutation_power)
@@ -285,6 +301,7 @@ def genetic_algorithm_train(env, agent, args):
     plot_file = os.path.join(model_dir, "rewards_plot.png")
 
     hof = load_hof(hof_file, env, args)
+    elites = load_elites(elite_file, env, args)
 
     rewards_over_generations = []  # Track rewards for each generation
 
@@ -313,42 +330,56 @@ def genetic_algorithm_train(env, agent, args):
                 individual_reward1, hof_reward1, ts1 = play_game(env=env, player1=individual.model, player2=hof_elite_member.model, args=args)
                 hof_reward2, individual_reward2, ts2 = play_game(env=env, player1=hof_elite_member.model, player2=individual.model, args=args)
                 individual_reward += individual_reward1 + individual_reward2
+
+                if args.debug:
+                    print(f"\n\thof elite {k} vs individual {i}, individual got reward = {individual_reward1 + individual_reward2}")
             
             individual_fitness = individual_reward / args.hof_size
-                                
-            population_fitness.append(individual_fitness)
             
             if args.debug:
-                print(f"\nindividual_fitness {individual_fitness}")
-
-        print("population_fitness = {population_fitness}")
+                print(f"\nindividual has fitness {individual_fitness}")
+                                
+            population_fitness.append(individual_fitness)
+    
+        if args.debug:
+            print(f"\npopulation_fitness = {population_fitness}")
+        
         ordered_population_fitness = np.argsort(population_fitness)[::-1]
-        print(f"ordered_population_fitness = {ordered_population_fitness}")
+        
+        if args.debug:
+            print(f"\nordered_population_fitness = {ordered_population_fitness}")
+
         elite_ids = ordered_population_fitness[:args.elites_number]
+
         elite_rewards = []
+
         elites = []
+
         for idd in elite_ids:
             elite_rewards.append(population_fitness[idd])
             elites.append(population[idd])
 
-        if args.debug:
-            print(f"\n elite = {elite_id}, with reward = {elite_reward}")
+            if args.debug:
+                print(f"\n elite = {idd}, with reward = {population_fitness[idd]}")
 
 
         best_id = elite_ids[0]
         best_agent = population[best_id]
-
+        population = []
+        population.append(best_agent)
+        
         if args.debug:
-            print(f"Best of the generation: {best_id}")
+            print(f"\nBest of the generation: {best_id}")
 
         hof.append(best_agent)
 
         # now we create the new population
         # the best id will be part of it
         # then we mutate the elite of T individuals, obtaining n-1 new individuals
-        population = []
-        population.append(best_agent)
-
+   
+        if args.debug:
+            print("\nlet's now mutate the elites")
+        
         new_mutations = mutate_elites(elites, args)
 
         for new_mutation in new_mutations:
@@ -361,20 +392,21 @@ def genetic_algorithm_train(env, agent, args):
             save_elites(elites, elite_file)
 
         # Evaluate best mutation vs random agent
-        evaluate_results = 0
+        evaluation_reward = 0
+
+        if args.debug:
+            print("\nlet's evaluate the best model against a random policy")
 
         if args.env_mode == "parallel":
-            evaluate_results = evaluate_current_weights_parallel(best_agent.model, env, args=args)
+            evaluation_reward = evaluate_current_weights_parallel(best_agent.model, env, args=args)
         else:
-            evaluate_results = evaluate_current_weights(best_agent.model, env, args=args)
-        
-        evaluate_rewards = evaluate_results['total_reward']
+            evaluation_reward = evaluate_current_weights(best_agent, env, args=args)
         
         if args.debug:
-            print(f"\ngen's best evaluation reward = {evaluate_rewards}")
+            print(f"\nevaluation reward = {evaluation_reward}")
 
         # Append evaluation reward for plotting
-        rewards_over_generations.append(evaluate_rewards)
+        rewards_over_generations.append(evaluation_reward)
 
         # adaptive mutation: TODO: PUT IN THE REPORT THAT THIS WAS NOT IN THE PAPER, IT WAS OUR IDEA
         if args.adaptive:

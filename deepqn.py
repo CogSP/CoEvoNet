@@ -5,37 +5,39 @@ import numpy as np
 from itertools import chain
 
 class DeepQN(nn.Module):
-    def __init__(self, input_channels, n_actions):
+    def __init__(self, input_channels, n_actions, precision):
         
         super(DeepQN, self).__init__()
+
+        self.dtype = torch.float16 if precision == "float16" else torch.float32
 
         self.layers = []
         
         # Convolutional layers
-        self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=8, stride=4)
+        self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=8, stride=4).to(dtype=self.dtype)
         self.layers.append(self.conv1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2).to(dtype=self.dtype)
         self.layers.append(self.conv2)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1).to(dtype=self.dtype)
         self.layers.append(self.conv3)
         
         # Fully connected layer
-        self.fc1 = nn.Linear(64 * 22 * 16, 512)  # Adjust this based on input size
+        self.fc1 = nn.Linear(64 * 7 * 7, 512).to(dtype=self.dtype)  # Adjust this based on input size
         self.layers.append(self.fc1)
-        self.output = nn.Linear(512, n_actions)
+        self.output = nn.Linear(512, n_actions).to(dtype=self.dtype)
         self.layers.append(self.output)
         
         # Virtual Batch Normalization layers
-        self.vbn1 = nn.BatchNorm2d(32)
+        self.vbn1 = nn.BatchNorm2d(32).to(dtype=self.dtype)
         self.layers.append(self.vbn1)
-        self.vbn2 = nn.BatchNorm2d(64)
+        self.vbn2 = nn.BatchNorm2d(64).to(dtype=self.dtype)
         self.layers.append(self.vbn2)
-        self.vbn3 = nn.BatchNorm2d(64)
+        self.vbn3 = nn.BatchNorm2d(64).to(dtype=self.dtype)
         self.layers.append(self.vbn3)
         
 
     def forward(self, x):
-
+        x = x.to(dtype=self.dtype)
         x = F.relu(self.vbn1(self.conv1(x)))
         x = F.relu(self.vbn2(self.conv2(x)))
         x = F.relu(self.vbn3(self.conv3(x)))

@@ -8,3 +8,5 @@ AutoROM
 gym[atari]
 tqdm
 matplotlib
+#torchvision
+supersuit

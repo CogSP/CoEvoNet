@@ -5,6 +5,8 @@ from agent import Agent
 from genetic_algorithm import genetic_algorithm_train, play_game, RandomPolicy, load_hof
 from evolutionary_strategy import evolution_strategy_train
 import os
+from supersuit import frame_stack_v1, resize_v1, frame_skip_v0, agent_indicator_v0
+
 
 
 def parse_arguments():
@@ -30,7 +32,7 @@ def parse_arguments():
                         help="Total timesteps per episode")
     parser.add_argument("--max_evaluation_steps", type=int, default=None, 
                         help="Maximum steps for evaluation")
-    parser.add_argument("--input_channels", type=int, default=3, 
+    parser.add_argument("--input_channels", type=int, default=6, 
                         help="Number of input channels for the observation")
     parser.add_argument("--elites_number", type=int, default=2, 
                         help="Number of elites for each generation")          
@@ -108,7 +110,11 @@ def initialize_env(args):
     """Initialize the environment based on the chosen mode."""
     atari_game_module = importlib.import_module(f"pettingzoo.atari.{args.atari_game}")
     if args.env_mode == "AEC":
-        env = atari_game_module.env(render_mode="human" if args.render else None)
+        env = atari_game_module.env(render_mode="human" if args.render else None, obs_type="grayscale_image")
+        env = frame_skip_v0(env, 4)
+        env = resize_v1(env, 84, 84)
+        env = frame_stack_v1(env, 4)
+        env = agent_indicator_v0(env)
     elif args.env_mode == "parallel":
         env = atari_game_module.parallel_env(render_mode="human" if args.render else None)
     else:
