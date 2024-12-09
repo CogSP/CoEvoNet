@@ -23,10 +23,10 @@ class Agent:
             raise ValueError(f"Unsupported precision: {self.precision}")
 
 
-    def clone(self):
+    def clone(self, args):
         # Clone the model weights
         clone = Agent(input_channels=self.model.conv1.in_channels, 
-                      n_actions=self.model.output.out_features)
+                      n_actions=self.model.output.out_features, precision=args.precision)
         clone.model.load_state_dict(self.model.state_dict())
         return clone
     

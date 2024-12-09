@@ -57,20 +57,14 @@ def save_elites(elites, file_path):
     #print(f"Elite weights saved to {file_path}")
 
 
-def load_hof(file_path, env, args=None):
+def load_hof(file_path, args=None, elites=None):
     """ Load the Hall of Fame (HoF) from disk. """
     if os.path.exists(file_path):
         hof = torch.load(file_path)
         print(f"Hall of Fame loaded from {file_path}")
     else:
         print(f"No HoF file found at {file_path}. Returning initial list of weights.")
-        hof = [Agent(
-                input_channels=args.input_channels,
-                n_actions=env.action_space(env.agents[0]).n,
-                precision=args.precision,
-            )
-            for _ in range(args.hof_size)
-        ]
+        hof = [elites[i].get_weights() for i in range(args.elites_number)]
     return hof
 
 def load_elites(file_path, args=None, env=None):
@@ -133,10 +127,10 @@ def evaluate_current_weights_parallel(best_mutation_weights, env, args):
     }
 
 
-def evaluate_current_weights(best_mutation, env, args):
+def evaluate_current_weights(best_mutation_weights, env, args):
     """ Evaluate weights by playing against a random policy. """
     elite = Agent(3, env.action_space(env.agents[0]).n, precision=args.precision)
-    elite.set_weights(best_mutation.get_weights())
+    elite.set_weights(best_mutation_weights)
     reward, _, ts = play_game(env=env, player1=elite.model,
                                     player2=RandomPolicy(env.action_space(env.agents[0]).n), 
                                     args=args, eval=True)
@@ -255,14 +249,27 @@ def evaluate_mutations_parallel(env, elite_weights, opponent_weights, args, muta
     }
 
 
-def mutate_elites(elites, args):
-    mutated_elites_list = []
-    for i in range(args.population-1):
-        elite = elites[i % args.elites_number]
-        mutated_elite = elite.clone(args)
-        mutated_elite.mutate(args.mutation_power)
-        mutated_elites_list.append(mutated_elite)
-    return mutated_elites_list
+def evaluate_mutations(env, elite_weights, opponent_weights, args, mutate_opponent=True):
+    """ Mutate (sometimes) the inputted weights and evaluate its performance against the inputted opponent. """
+    elite = Agent(args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision) # first_0 since the actions set is equal for both agents
+    elite.model.set_weights(elite_weights)
+    opponent = Agent(args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+    opponent.model.set_weights(opponent_weights)
+
+    if mutate_opponent:
+        opponent.mutate(args.mutation_power)
+
+    elite_reward1, opponent_reward1, ts1 = play_game(env=env, player1=elite.model, player2=opponent.model, args=args)
+    opponent_reward2, elite_reward2, ts2 = play_game(env=env, player1=opponent.model, player2=elite.model, args=args)
+    
+    total_elite = elite_reward1 + elite_reward2
+    total_opponent = opponent_reward1 + opponent_reward2
+    return {
+        'opponent_weights': opponent.model.get_weights(),
+        'score_vs_elite': total_opponent,
+        'timesteps_total': ts1 + ts2,
+    }
+
 
 
 def genetic_algorithm_train(env, agent, args):
@@ -284,75 +291,80 @@ def genetic_algorithm_train(env, agent, args):
     elite_file = os.path.join(model_dir, "elite_weights.pth")
     plot_file = os.path.join(model_dir, "rewards_plot.png")
 
-    hof = load_hof(hof_file, env, args)
+    elites = load_elites(elite_file, args, env)
+    hof = load_hof(hof_file, args, elites)
 
     rewards_over_generations = []  # Track rewards for each generation
-
-
-    population = []
-    for i in tqdm(range(args.population), desc=f"Creating initial population (n = {args.population})", leave=False):
-        agent = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
-        population.append(agent)
 
     for gen in tqdm(range(args.generations), desc="Generations"):
 
         results = []
-        population_fitness = []
-
+        
         # Evaluate mutations vs first hof
         # here mutations happen
-        for i in tqdm(range(args.population), desc=f"Population vs HoF elite (k = {args.hof_size})", leave=False):
-
-            individual_reward = 0
-
-            individual = population[i]
-
-            for k in tqdm(range(args.hof_size), desc=f"Individual n.{i} vs HoF elite", leave=False):
-                
-                hof_elite_member = hof[k]
-                individual_reward1, hof_reward1, ts1 = play_game(env=env, player1=individual.model, player2=hof_elite_member.model, args=args)
-                hof_reward2, individual_reward2, ts2 = play_game(env=env, player1=hof_elite_member.model, player2=individual.model, args=args)
-                individual_reward += individual_reward1 + individual_reward2
-            
-            individual_fitness = individual_reward / args.hof_size
-                                
-            population_fitness.append(individual_fitness)
+        for i in tqdm(range(args.population), desc=f"Evaluating Elite vs Youngest HoF (Gen {gen})", leave=False):
+            elite_id = i % args.elites_number
+            should_mutate = (i > args.elites_number)
+            if args.env_mode == "parallel":
+                results.append(evaluate_mutations_parallel(env, hof[-1], elites[elite_id].get_weights(), args, mutate_opponent=should_mutate))
+            else:
+                results.append(evaluate_mutations(env, hof[-1], elites[elite_id].get_weights(), args, mutate_opponent=should_mutate))
             
             if args.debug:
-                print(f"\nindividual_fitness {individual_fitness}")
+                print(f"\nelite {elite_id} vs Best of the HoF")
+                print(f"\n\t reward: {results[-1]['score_vs_elite']}")
+        
 
-        print("population_fitness = {population_fitness}")
-        ordered_population_fitness = np.argsort(population_fitness)[::-1]
-        print(f"ordered_population_fitness = {ordered_population_fitness}")
-        elite_ids = ordered_population_fitness[:args.elites_number]
-        elite_rewards = []
-        elites = []
-        for idd in elite_ids:
-            elite_rewards.append(population_fitness[idd])
-            elites.append(population[idd])
+        # Evaluate vs other hof
+        for j in tqdm(range(len(hof) - 1), desc=f"Evaluating Population vs the rest of the HoF (Gen {gen})", leave=False):
+            with tqdm(range(args.population), desc=f"Individuals vs HoF n.{len(hof)-2-j} (Gen {gen})", leave=False) as inner_pbar:
+                for i in inner_pbar:
+
+                    if args.env_mode == "parallel":
+                        results.append(evaluate_mutations_parallel(env, elite_weights=hof[-2 - j], opponent_weights=results[i]['opponent_weights'], args=args, mutate_opponent=False))
+                    else:
+                        results.append(evaluate_mutations(env, elite_weights=hof[-2 - j], opponent_weights=results[i]['opponent_weights'], args=args, mutate_opponent=False))
+            
+                    
+                    if args.debug:
+                        inner_pbar.set_postfix(individual=i, reward=results[-1]['score_vs_elite'])
+                        print(f"individual {i} vs HoF n.{len(hof)-2-j}")
+                        print(f"\t reward: {results[-1]['score_vs_elite']}")
+
+        rewards = []
+
+        #print(len(results))
+        for i in range(args.population):
+            total_reward = 0
+            for j in range(len(hof)):
+                reward_index = args.population * j + i
+                total_reward += results[reward_index]['score_vs_elite']
+            rewards.append(total_reward)
+
+        best_mutation_id = np.argmax(rewards)
+        best_mutation_weights = results[best_mutation_id]['opponent_weights']
+
+
 
         if args.debug:
-            print(f"\n elite = {elite_id}, with reward = {elite_reward}")
+            print(f"Best mutation: {best_mutation_id} with reward {np.max(rewards)}")
 
 
-        best_id = elite_ids[0]
-        best_agent = population[best_id]
+        #self.try_save_winner(best_mutation_weights)
+        if len(hof) < args.hof_size:
+            hof.append(best_mutation_weights)
+        else:
+            hof.pop(0)
+            hof.append(best_mutation_weights)
 
-        if args.debug:
-            print(f"Best of the generation: {best_id}")
 
-        hof.append(best_agent)
 
-        # now we create the new population
-        # the best id will be part of it
-        # then we mutate the elite of T individuals, obtaining n-1 new individuals
-        population = []
-        population.append(best_agent)
-
-        new_mutations = mutate_elites(elites, args)
-
-        for new_mutation in new_mutations:
-            population.append(new_mutation)
+        # Elitism retains the best agents from each generation, ensuring the algorithm doesn't lose progress:
+        new_elite_ids = np.argsort(rewards)[-args.elites_number:]
+        #print(f"TOP mutations: {new_elite_ids}")
+        for i, elite in enumerate(elites):
+            mutation_id = new_elite_ids[i]
+            elite.set_weights(results[mutation_id]['opponent_weights'])
 
 
         # Save the HoF and the elites at the end of each generation
@@ -364,14 +376,18 @@ def genetic_algorithm_train(env, agent, args):
         evaluate_results = 0
 
         if args.env_mode == "parallel":
-            evaluate_results = evaluate_current_weights_parallel(best_agent.model, env, args=args)
+            evaluate_results = evaluate_current_weights_parallel(best_mutation_weights, env, args=args)
         else:
-            evaluate_results = evaluate_current_weights(best_agent.model, env, args=args)
+            evaluate_results = evaluate_current_weights(best_mutation_weights, env, args=args)
         
         evaluate_rewards = evaluate_results['total_reward']
         
         if args.debug:
             print(f"\ngen's best evaluation reward = {evaluate_rewards}")
+
+        #evaluate_videos = [result['video'] for result in evaluate_results]
+
+        #increment_metrics(results)
 
         # Append evaluation reward for plotting
         rewards_over_generations.append(evaluate_rewards)

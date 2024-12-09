@@ -50,9 +50,13 @@ def parse_arguments():
                         help="Save the models")
     parser.add_argument("--adaptive", action="store_true",
                         help="Enable adaptive mutation power, decreasing over time")
+    parser.add_argument("--ES_model_to_test", type=str, default=None,
+                        help="If testing ES, choose the model to test from CLI")
+    parser.add_argument("--GA_hof_to_test", type=str, default=None,
+                        help="If testing GA, choose the model to test from CLI")
+    parser.add_argument("--play_against_yourself", action="store_true",
+                        help="If true, the model plays against itself. If false, it plays against a dummy (RandomPolicy)")
     
-
-
     return parser.parse_args()
 
 
@@ -82,6 +86,9 @@ class Args:
         self.env_mode = args.env_mode
         self.precision = args.precision
         self.save = args.save
+        self.ES_model_to_test = args.ES_model_to_test
+        self.GA_hof_to_test = args.GA_hof_to_test
+        self.play_against_yourself = args.play_against_yourself
 
 
     def print_attributes(self, args): 
@@ -91,7 +98,10 @@ class Args:
             if attr != "input_channels":  # Skip `input_channel`
                 if attr != "elites_number" or args.algorithm=="GA":
                     if attr != "learning_rate" or args.algorithm=="ES":
-                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                        if attr != "ES_model_to_test" or (args.algorithm == "ES" and args.test and not args.train):
+                            if attr != "GA_hof_to_test" or (args.algorithm == "GA" and args.test and not args.train):
+                                if attr != "play_against_yourself" or args.test:
+                                    print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
 def initialize_env(args):
@@ -114,6 +124,13 @@ def main():
 
     hof = []
 
+
+    print("\nHyperparameters and Parameters:")
+    args = Args(args)
+    args.print_attributes(args)
+    print("\n")
+
+
     if args.train:
 
         print("Starting Training...")
@@ -121,12 +138,6 @@ def main():
         agent = env.agents[0]
         input_channels = env.observation_space(agent).shape[-1]
         num_actions = env.action_space(agent).n
-
-        print("\nHyperparameters and Parameters:")
-        args = Args(args)
-        args.print_attributes(args)
-        print("\n")
-
 
         # Train agent using the selected algorithm
         if args.algorithm == "GA":
@@ -142,24 +153,57 @@ def main():
 
 
     if args.test:
-        
-        hof_file = os.path.join("GA_models/gens6_pop10_hof5_gamepong_v3_mut0.05_lr0.1", "hall_of_fame.pth")
-        hof = load_hof(hof_file)
-        env = initialize_env(args)  
 
-        best_model = Agent(args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
-        best_model.set_weights(hof[-1])
+        if args.algorithm == "ES":
+           
+            if args.ES_model_to_test is not None and not os.path.exists(args.ES_model_to_test):
+                print(f"Error: Model file {args.ES_model_to_test} not found.")
+                return
+                
 
-        total_rewards = 0
-        test_episodes = 10
-        for episode in range(10):
-            reward, _, timesteps = play_game(env=env, player1=best_model.model,
-                                        player2=RandomPolicy(env.action_space(env.agents[0]).n), 
-                                        args=args, eval=True)
-        total_rewards += reward
+            print(f"Loading model from {args.ES_model_to_test} for testing...")
+            agent = torch.load(args.ES_model_to_test)
+            total_rewards = 0
+            test_episodes = 10
+            for episode in range(10):
 
-        avg_reward = total_rewards / test_episodes
-        print(f"\n Average Reward of Best Model over {test_episodes} Episodes: {avg_reward}")
+                if args.play_against_yourself:
+                    reward, _, timesteps = play_game(env=env, player1=agent.model,
+                                                player2=agent.model, 
+                                                args=args, eval=True)
+                else:
+                    reward, _, timesteps = play_game(env=env, player1=agent.model,
+                                                player2=RandomPolicy(env.action_space(env.agents[0]).n), 
+                                                args=args, eval=True)
+
+            total_rewards += reward
+
+            avg_reward = total_rewards / test_episodes
+            print(f"\n Average Reward of Best Model over {test_episodes} Episodes: {avg_reward}")
+
+
+
+
+        else: # args.algorithm == "GA"
+            
+            # TODO: TO TEST
+            
+            hof = load_hof(args.model_to_test)
+            env = initialize_env(args)  
+
+            best_model = Agent(args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+            best_model.set_weights(hof[-1])
+
+            total_rewards = 0
+            test_episodes = 10
+            for episode in range(10):
+                reward, _, timesteps = play_game(env=env, player1=best_model.model,
+                                            player2=RandomPolicy(env.action_space(env.agents[0]).n), 
+                                            args=args, eval=True)
+            total_rewards += reward
+
+            avg_reward = total_rewards / test_episodes
+            print(f"\n Average Reward of Best Model over {test_episodes} Episodes: {avg_reward}")
 
 
 if __name__ == "__main__":
