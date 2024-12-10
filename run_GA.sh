@@ -12,4 +12,4 @@ python3.9 main.py \
     --algorithm=GA \
     --max_timesteps_per_episode=1000 \
     --max_evaluation_steps=1000 \
-    --initial_mutation_power=0.005
+    --initial_mutation_power=0.005 \
