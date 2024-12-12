@@ -4,7 +4,7 @@ This repository implements a coevolutionary approach to training agents for mult
 
 ## Table of Contents
 - [Features](#features)
-- [Requirements and installation](#requirements)
+- [Requirements and Installation](#requirements)
 - [Usage](#usage)
 - [Algorithms](#algorithms)
 - [Environments](#environments)
@@ -55,7 +55,8 @@ The framework supports the following PettingZoo Games:
 
 
 # Results
-TODO
+![rewards_plot](https://github.com/user-attachments/assets/7a623fbb-f87b-4cad-81e3-1dc12e4f51f1)
+
 
 # References
 
