@@ -44,9 +44,12 @@ def save_model(obj, file_path):
     """Save any object to a file."""
     torch.save(obj, file_path)
 
+
 def create_output_dir(args):
     """Create a directory for saving models and plots."""
-    dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_adaptive{args.adaptive}_lr{args.learning_rate}_tslimit{args.max_timesteps_per_episode}"
+    dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_adaptive{args.adaptive}_tslimit{args.max_timesteps_per_episode}"
+    if args.algorithm == "ES":
+        dir_name += f"_lr{args.learning_rate}"
     os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
