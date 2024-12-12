@@ -6,41 +6,6 @@ import torch
 import os
 
 
-def load_agent_for_testing(args):
-
-    if args.algorithm == "GA":
-
-        if args.GA_hof_to_test is None:
-            print(f"Error: HoF file not specified. Please specify the HoF to test")
-            return
-            
-        if not os.path.exists(args.GA_hof_to_test):
-            print(f"Error: Model file {args.GA_hof_to_test} not found.")
-            return
-
-        print(f"Loading HoF from {args.GA_hof_to_test} for testing...")
-        hof = torch.load(file_path)
-        agent = create_agent(env, args)
-        agent.set_weights(hof[-1])
-
-        return agent
-
-    elif args.algorithm == "ES":
-
-        if args.ES_model_to_test is None:
-            print(f"Error: Model file not specified. Please specify the agent to test")
-            return
-            
-        if not os.path.exists(args.ES_model_to_test):
-            print(f"Error: Model file {args.ES_model_to_test} not found.")
-            return
-
-        print(f"Loading Agent from {args.ES_model_to_test} for testing...")
-        agent = torch.load(args.ES_model_to_test)
-
-        return agent
-
-
 def initialize_env(args):
     """Initialize the environment """
     env = None
@@ -49,16 +14,11 @@ def initialize_env(args):
         env = mpe_game_module.env(render_mode="human" if args.render else None)
     else:
         atari_game_module = importlib.import_module(f"pettingzoo.atari.{args.game}")
-        if args.env_mode == "AEC":
-            env = atari_game_module.env(render_mode="human" if args.render else None, obs_type="grayscale_image")
-            env = frame_skip_v0(env, 4)
-            env = resize_v1(env, 84, 84)
-            env = frame_stack_v1(env, 4)
-            env = agent_indicator_v0(env)
-        elif args.env_mode == "parallel":
-            env = atari_game_module.parallel_env(render_mode="human" if args.render else None)
-        else:
-            raise ValueError("Invalid environment mode. Choose either 'AEC' or 'parallel'.")
+        env = atari_game_module.env(render_mode="human" if args.render else None, obs_type="grayscale_image")
+        env = frame_skip_v0(env, 4)
+        env = resize_v1(env, 84, 84)
+        env = frame_stack_v1(env, 4)
+        env = agent_indicator_v0(env)
     env.reset(seed=1938214)
     return env
 
@@ -172,6 +132,7 @@ def play_game(env, player1, player2, adversary=None, args=None, eval=False):
     env.reset()
 
     if args.game == "simple_adversary_v3":
+        adversary = RandomPolicy(env.action_space(env.agents[0]).n)
         rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args)
         return rw_p1, rw_p2
     else:

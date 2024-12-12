@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from utils.game_logic_functions import create_agent, play_game
-from utils.utils_plot import plot_rewards
+from utils.utils_pth_and_plots import plot_rewards, save_model
 from utils.game_logic_functions import initialize_env
 from utils.utils_policies import RandomPolicy
 from agent import Agent
@@ -9,60 +9,11 @@ from tqdm import tqdm
 import os
 
 
-def create_ga_model_dir(args):
-    """Create a directory for saving models based on hyperparameters."""
-    dir_name = f"GA_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_adaptive{args.adaptive}_tslimit{args.max_timesteps_per_episode}"
-    os.makedirs(dir_name, exist_ok=True)
-    return dir_name
-
-
-def save_hof(hof, file_path):
-    """ Save the Hall of Fame (HoF) to disk. """
-    torch.save(hof, file_path)
-    #print(f"Hall of Fame saved to {file_path}")
-
-
-def save_elites(elites, file_path):
-    """ Save the elites to disk. """
-    elite_weights = [elite.get_weights() for elite in elites]
-    torch.save(elite_weights, file_path)
-    #print(f"Elite weights saved to {file_path}")
-
-
-def load_hof(file_path, env, args=None):
-    """ Load the Hall of Fame (HoF) from disk. """
-    if os.path.exists(file_path):
-        hof = torch.load(file_path)
-        print(f"Hall of Fame loaded from {file_path}")
-    else:
-        print(f"No HoF file found at {file_path}. Returning initial list of weights.")
-        hof = [create_agent(env, args) for _ in range(args.hof_size)]
-    return hof
-
-def load_elites(file_path, env=None, args=None):
-    """ Load the elites from disk. """
-    elites_agents = []
-    if os.path.exists(file_path):
-        elites_agents = torch.load(file_path)
-        print(f"Elites loaded from {file_path}")
-    else:
-        print(f"No elites found at {file_path}. Returning initial list of weights.")
-        elites_agents = [create_agent(env, args) for _ in range(args.hof_size)]
-
-        for agent in elites_agents:
-            if args.precision == "float16":
-                agent.model.half()
-            else:
-                agent.model.float()
-
-    return elites_agents
-
-
 
 def evaluate_current_weights(best_agent, env, args):
     """Evaluate the current weights against a random policy."""
     total_reward = 0
-    for i in tqdm(range(5), desc="Evaluating best model against 5 dummies", leave=False):  
+    for i in tqdm(range(10), desc="Evaluating best model against 5 dummies", leave=False):  
         reward, _ = play_game(env=env, player1=best_agent.model,
                                     player2=RandomPolicy(env.action_space(env.agents[0]).n),
                                     args=args, eval=True)
@@ -71,9 +22,7 @@ def evaluate_current_weights(best_agent, env, args):
         if args.debug:
             print(f"\n\t evaluation number {i}, reward = {reward} ")
     
-    return total_reward / 5
-
-
+    return total_reward / 10
 
 
 def mutate_elites(env, elites, args):
@@ -88,7 +37,7 @@ def mutate_elites(env, elites, args):
     return mutated_elites_list
 
 
-def genetic_algorithm_train(env, agent, args):
+def genetic_algorithm_train(env, agent, args, output_dir):
     
     """ Evolve the next generation using the Genetic Algorithm. This process
     consists of three steps:
@@ -102,16 +51,20 @@ def genetic_algorithm_train(env, agent, args):
 
     # Load elites and HoF from disk if they exist
     # Otherwise, just initialize them
-    model_dir = create_ga_model_dir(args)
-    hof_file = os.path.join(model_dir, "hall_of_fame.pth")
-    elite_file = os.path.join(model_dir, "elite_weights.pth")
-    plot_file = os.path.join(model_dir, "rewards_plot.png")
+    hof_file = os.path.join(output_dir, "hall_of_fame.pth")
+    elite_file = os.path.join(output_dir, "elite_weights.pth")
+    rewards_plot_file = os.path.join(output_dir, "rewards_plot.png")
 
-    hof = load_hof(hof_file, env, args)
-    elites = load_elites(elite_file, env, args)
+    hof = [create_agent(env, args) for _ in range(args.hof_size)]
+    elites = [create_agent(env, args) for _ in range(args.hof_size)]
+
+    for agent in elites:
+        if args.precision == "float16":
+            agent.model.half()
+        else:
+            agent.model.float()
 
     rewards_over_generations = []  # Track rewards for each generation
-
 
     population = []
     for i in tqdm(range(args.population), desc=f"Creating initial population (n = {args.population})", leave=False):
@@ -196,8 +149,8 @@ def genetic_algorithm_train(env, agent, args):
 
         # Save the HoF and the elites at the end of each generation
         if args.save:
-            save_hof(hof, hof_file)
-            save_elites(elites, elite_file)
+            save_model(hof, hof_file)
+            save_model(elites, elite_file)
 
         # Evaluate best mutation vs random agent
         evaluation_reward = 0
@@ -205,11 +158,8 @@ def genetic_algorithm_train(env, agent, args):
         if args.debug:
             print("\nlet's evaluate the best model against a random policy")
 
-        if args.env_mode == "parallel":
-            evaluation_reward = evaluate_current_weights_parallel(best_agent.model, env, args=args)
-        else:
-            evaluation_reward = evaluate_current_weights(best_agent, env, args=args)
-        
+        evaluation_reward = evaluate_current_weights(best_agent, env, args=args)
+    
         if args.debug:
             print(f"\nevaluation reward = {evaluation_reward}")
 
@@ -221,8 +171,8 @@ def genetic_algorithm_train(env, agent, args):
             args.mutation_power = max(0.01, args.mutation_power * 0.95)  # Reduce over generations
 
         # Plot and save rewards progression
-        average_window = 5  # Define window for moving average (e.g., 5 or 10 generations)
-        plot_rewards(rewards_over_generations, plot_file, window=average_window)
+        average_window = 50  # Define window for moving average
+        plot_rewards(rewards_over_generations, rewards_plot_file, window=average_window)
 
     return hof
 

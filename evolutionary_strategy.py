@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from utils.game_logic_functions import play_game, create_agent
 from utils.utils_policies import RandomPolicy
-from utils.utils_plot import plot_rewards
+from utils.utils_pth_and_plots import plot_rewards, save_model
 from agent import Agent
 from tqdm import tqdm
 import os
@@ -18,21 +18,10 @@ def get_numpy_dtype(precision):
         # Default to float32 if unsupported precision is given
         return np.float32
 
-
-def create_es_model_dir(args):
-    """Create a directory for saving models based on hyperparameters."""
-    dir_name = f"ES_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_adaptive{args.adaptive}_lr{args.learning_rate}_tslimit{args.max_timesteps_per_episode}"
-    os.makedirs(dir_name, exist_ok=True)
-    return dir_name
-
-def save_model(obj, file_path):
-    """Save any object to a file."""
-    torch.save(obj, file_path)
-
 def evaluate_current_weights(agent, env, args):
-    """Evaluate the current weights against a random policy."""
+    """Evaluate the current weights ten times against a random policy."""
     total_reward = 0
-    for _ in tqdm(range(10), desc="Evaluating weights", leave=False):  # Evaluate over multiple episodes
+    for _ in tqdm(range(10), desc="Evaluating weights", leave=False): 
         reward, _ = play_game(env=env, player1=agent.model,
                                     player2=RandomPolicy(env.action_space(env.agents[0]).n),
                                     args=args, eval=True)
@@ -72,14 +61,13 @@ def compute_weight_update(noises, rewards, args):
 
     return weights_update
 
-def evolution_strategy_train(env, agent, args):
+def evolution_strategy_train(env, agent, args, output_dir):
     """Train the agent using Evolution Strategies with Elitism and Hall of Fame."""
 
 
     # Initialize directories and variables for saving
-    model_dir = create_es_model_dir(args)
-    agent_file = os.path.join(model_dir, "agent.pth")
-    rewards_plot_file = os.path.join(model_dir, "rewards_plot.png")
+    agent_file = os.path.join(output_dir, "agent.pth")
+    rewards_plot_file = os.path.join(output_dir, "rewards_plot.png")
 
     agent = create_agent(env, args)
 

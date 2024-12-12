@@ -6,8 +6,9 @@ from genetic_algorithm import genetic_algorithm_train
 from evolutionary_strategy import evolution_strategy_train
 from utils.game_logic_functions import initialize_env
 from supersuit import frame_stack_v1, resize_v1, frame_skip_v0, agent_indicator_v0
-from utils.game_logic_functions import create_agent, play_game, load_agent_for_testing
+from utils.game_logic_functions import create_agent, play_game
 from utils.utils_policies import RandomPolicy, PeriodicPolicy, AlwaysFirePolicy
+from utils.utils_pth_and_plots import create_output_dir, load_agent_for_testing
 
 
 
@@ -44,8 +45,8 @@ def parse_arguments():
                         help="Enable rendering during training")
     parser.add_argument("--test", action="store_true",
                         help="Test the models")
-    parser.add_argument("--env_mode", type=str, choices=["AEC", "parallel"], default="AEC", 
-                        help="Choose the environment mode: AEC (Agent-Environment Cycle) or parallel")
+    parser.add_argument("--env_mode", type=str, choices=["AEC"], default="AEC", 
+                        help="Choose the environment mode. Currently, only AEC is supported")
     parser.add_argument("--precision", type=str, choices=["float32", "float16"], default="float32",
                         help="Specify the precision for computations: float32 or float16")
     parser.add_argument("--save", action="store_true",
@@ -114,6 +115,7 @@ def main():
     args.print_attributes(args)
     print("\n")
 
+    output_dir = create_output_dir(args)
 
     if args.train:
 
@@ -122,9 +124,9 @@ def main():
         env = initialize_env(args)
 
         if args.algorithm == "GA":
-            hof = genetic_algorithm_train(env, env.agents[0], args)
+            hof = genetic_algorithm_train(env, env.agents[0], args, output_dir)
         elif args.algorithm == "ES":
-            agent = evolution_strategy_train(env, env.agents[0], args)
+            agent = evolution_strategy_train(env, env.agents[0], args, output_dir)
         else:
             print("Unknown algorithm. Exiting.")
             return
