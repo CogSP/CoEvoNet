@@ -8,5 +8,8 @@ AutoROM
 gym[atari]
 tqdm
 matplotlib
-# stable_baselines3  # to study the behavior of our models towards SB pre-towed in env MPE. Refer to /extras.
 supersuit
+
+# to study the behavior of our models towards SB pre-towed in env MPE. 
+# Refer to /extras.
+# stable_baselines3  

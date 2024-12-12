@@ -1,23 +1,63 @@
-NOTE: WE ARE USING PYTHON 3.9 VERSION
+# A Coevolutionary Approach to Deep Multi-Agent Reinforcement Learning
 
-- The DeepQN model (neural network) serves as the agent that interacts with the environment.
+This repository implements a coevolutionary approach to training agents for multi-agent reinforcement learning environments. Inspired by **Deep Neuroevolution** and **Coevolutionary Algorithms**, we combine genetic algorithms (GA) and evolution strategies (ES) to train deep neural networks for challenging multi-agent decision-making problems.
 
+## Table of Contents
+- [Features](#features)
+- [Requirements and installation](#requirements)
+- [Usage](#usage)
+- [Algorithms](#algorithms)
+- [Environments](#environments)
+- [Results](#results)
+- [References](#references)
 
-- In GA: We mutate or crossover the weights of the neural network for evolutionary selection.
+---
 
+## Features
+- **Coevolutionary Training**: Employs genetic algorithms and evolution strategies to evolve neural networks in a multi-agent setting.
+- **Multi-Agent Support**: Designed for PettingZoo environments, supporting both cooperative and competitive scenarios.
+- **Pre-trained Models**: Includes support for integrating pre-trained models trained with frameworks like `Stable-Baselines3`.
+- **Customizable**: Easily configure environment wrappers, neural network architectures, and hyperparameters.
+- **Benchmarks**: Tested on PettingZoo's Atari games and MPE.
 
-- In ES: We apply noise to the weights of the neural network, simulating mutations, and update the network weights based on the fitness scores of the agent's actions.
+---
 
-This approach treats the agent (DNN) as an evolving entity whose weights are optimized over generations using evolutionary algorithms instead of traditional reinforcement learning methods. The fitness of each agent is determined by how well it performs in the environment, and the weights are evolved by the evolutionary strategy.
-
-
-# Running the program
-
-First, install all the dependencies running
+## Requirements and Installation
+- Python: we used version 3.9
+- Install all the required dependencies using:
 ```bash
 ./install.sh
 ```
-Run the script from the command line and specify the desired algorithm and hyperparameters. For instance:
-```bash
-python main.py --algorithm GA --generations 50 --population 200 --initial_mutation_power 0.05
-```
+
+## Usage
+- ```train_ES``` and ```train_GA``` to train
+- ```test_ES``` and ```test_GA``` to test the trained models.
+
+Please inspect the file if you want to check and modify config and hyperparameters.
+
+
+## Algorithms
+ 
+### Coevolutionary Evolution Strategies (Co-ES)
+
+Adapts Evolution Strategies (ES) for multi-agent environments. Agents evolve by optimizing fitness functions tailored to competitive/cooperative tasks.
+
+### Coevolutionary Genetic Algorithms (Co-GA)
+
+Uses mutation, crossover, and selection to evolve agents. Incorporates a Hall of Fame (HoF) to maintain strong adversaries for evaluation.
+
+
+## Environments
+Supported Environments
+The framework supports the following PettingZoo Games:
+- simple_adversary_v3: A cooperative-competitive MPE task involving good agents and adversaries.
+- pong_v3 and boxing_v2: Competitive Atari-based tasks.
+
+
+# Results
+TODO
+
+# References
+
+- "Coevolutionary Reinforcement Learning in Multi-Agent Environments",
+by Daan Klijn and A.E. Eiben, Vrije Universiteit Amsterdam.
