@@ -1,10 +1,10 @@
 import torch
 import numpy as np
-from deepqn import DeepQN
-from genetic_algorithm import play_game, RandomPolicy, plot_rewards
+from utils.game_logic_functions import play_game, create_agent
+from utils.utils_policies import RandomPolicy
+from utils.utils_plot import plot_rewards
 from agent import Agent
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 import os
 
 def get_numpy_dtype(precision):
@@ -21,7 +21,7 @@ def get_numpy_dtype(precision):
 
 def create_es_model_dir(args):
     """Create a directory for saving models based on hyperparameters."""
-    dir_name = f"ES_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.atari_game}_mut{args.mutation_power}_adaptive{args.adaptive}_lr{args.learning_rate}_tslimit{args.max_timesteps_per_episode}"
+    dir_name = f"ES_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_adaptive{args.adaptive}_lr{args.learning_rate}_tslimit{args.max_timesteps_per_episode}"
     os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
@@ -33,27 +33,25 @@ def evaluate_current_weights(agent, env, args):
     """Evaluate the current weights against a random policy."""
     total_reward = 0
     for _ in tqdm(range(10), desc="Evaluating weights", leave=False):  # Evaluate over multiple episodes
-        reward, _, ts = play_game(env=env, player1=agent.model,
+        reward, _ = play_game(env=env, player1=agent.model,
                                     player2=RandomPolicy(env.action_space(env.agents[0]).n),
                                     args=args, eval=True)
         total_reward += reward
     return total_reward / 10
 
 
-def mutate_weights(env, base_weights, args):
+def mutate_weights(env, agent, args):
     """Apply Gaussian noise to the weights."""
     np_dtype = get_numpy_dtype(args.precision)
-    base_weights = base_weights.astype(np_dtype)
-    agent = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
-    agent.model.set_weights_ES(flat_weights=base_weights, args=args)
-    mutated_agent = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
-    mutated_agent.model.set_weights_ES(flat_weights=base_weights, args=args)
+    mutated_agent = agent.clone(env, args)
     perturbations = mutated_agent.mutate_ES(args)
     perturbations = perturbations.astype(np_dtype)
    
-    _, mutated_agent_reward1, _ = play_game(env=env, player1=agent.model, player2=mutated_agent.model, args=args)
-    mutated_agent_reward2, _, _ = play_game(env=env, player1=mutated_agent.model, player2=agent.model, args=args)
+    _, mutated_agent_reward1 = play_game(env=env, player1=agent.model, player2=mutated_agent.model, args=args)
+    mutated_agent_reward2, _ = play_game(env=env, player1=mutated_agent.model, player2=agent.model, args=args)
     
+
+    # TODO: why are we using the mean here and not the sum as in GA?
     total_reward = np.mean([mutated_agent_reward1, mutated_agent_reward2]).astype(np_dtype)
 
     return total_reward, perturbations
@@ -83,12 +81,14 @@ def evolution_strategy_train(env, agent, args):
     agent_file = os.path.join(model_dir, "agent.pth")
     rewards_plot_file = os.path.join(model_dir, "rewards_plot.png")
 
-    agent = Agent(input_channels=args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
+    agent = create_agent(env, args)
+
+    total_params = sum(p.numel() for p in agent.model.parameters()) 
+    print(f'\n Number of parameters of each network: {total_params}')
     
     np_dtype = get_numpy_dtype(args.precision)
-    
     base_weights = agent.model.get_perturbable_weights().astype(np_dtype)
-
+    
     rewards_over_generations = []
 
     for gen in tqdm(range(args.generations), desc="Training Generations"):
@@ -97,7 +97,7 @@ def evolution_strategy_train(env, agent, args):
 
         # Step 1: Generate population by mutating weights
         for _ in tqdm(range(args.population), desc=f"Generation {gen} - Mutating", leave=False):
-            total_reward, noise = mutate_weights(env, base_weights, args)
+            total_reward, noise = mutate_weights(env, agent, args)
             noises.append(noise)
             rewards.append(total_reward)
 
@@ -115,11 +115,10 @@ def evolution_strategy_train(env, agent, args):
             args.mutation_power = max(0.01, args.mutation_power * 0.95)  # Reduce over generations
 
         # Save agent and plot rewards at each generation
-        save_model(agent, agent_file)
+        if args.save:
+            save_model(agent, agent_file)
         
-        average_window=10
+        average_window=50
         plot_rewards(rewards_over_generations, rewards_plot_file, window=average_window)
-
-
 
     return agent

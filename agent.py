@@ -1,35 +1,27 @@
-from deepqn import DeepQN
 import torch
 import torch.optim as optim
 import numpy as np
 
 
-# Agent class to hold the neural network and training logic
+
 class Agent:
-    def __init__(self, input_channels, n_actions, precision):
-        self.model = DeepQN(input_channels, n_actions, precision)
-        self.precision = precision
-        self.apply_precision
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
-    
+
+    def __init__(self, model, optimizer, args):
+
+        self.model = model
+        self.optimizer = optimizer 
+        self.precision = args.precision
         
+
     def apply_precision(model, precision):
         """Apply the specified precision to the model and default tensor type."""
         if self.precision == "float16":
-                    self.model = self.model.half()
+            self.model = self.model.half()
         elif self.precision == "float32":
             self.model = self.model.float()
         else:
             raise ValueError(f"Unsupported precision: {self.precision}")
 
-
-    def clone(self, args):
-        # Clone the model weights
-        clone = Agent(input_channels=self.model.conv1.in_channels, 
-                      n_actions=self.model.output.out_features, precision=args.precision)
-        clone.model.load_state_dict(self.model.state_dict())
-        return clone
-    
     def mutate(self, noise_std):
         # Add Gaussian noise to the model weights (for ES or GA mutation)
         for param in self.model.parameters():
@@ -72,3 +64,11 @@ class Agent:
     def get_weights(self):
         # Return model weights (useful for ES)
         return self.model.state_dict()
+
+
+    def clone(self, args):
+        """
+        Delegates the clone method to the specific subclass instance.
+        """
+        raise NotImplementedError("The clone method should be implemented by the specific agent type.")
+

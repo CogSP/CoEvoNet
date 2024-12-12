@@ -35,7 +35,7 @@ class DeepQN(nn.Module):
         self.vbn3 = nn.BatchNorm2d(64).to(dtype=self.dtype)
         self.layers.append(self.vbn3)
         
-
+        
     def forward(self, x):
         x = x.to(dtype=self.dtype)
         x = x / 255

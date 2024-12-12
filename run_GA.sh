@@ -1,6 +1,7 @@
 #!/bin/bash
 
 python3.9 main.py \
+    --algorithm=GA \
     --train \
     --save \
     --generations=500 \
@@ -8,8 +9,7 @@ python3.9 main.py \
     --hof_size=3 \
     --elites_number=5 \
     --precision=float16 \
-    --atari_game=pong_v3 \
-    --algorithm=GA \
-    --max_timesteps_per_episode=1000 \
-    --max_evaluation_steps=1000 \
+    --game=simple_adversary_v3 \
+    --max_timesteps_per_episode=400 \
+    --max_evaluation_steps=400 \
     --initial_mutation_power=0.005 \

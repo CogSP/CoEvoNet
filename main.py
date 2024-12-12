@@ -1,11 +1,13 @@
 import argparse
-import importlib # to import dinamically the Atari Games
 import torch
-from agent import Agent
-from genetic_algorithm import genetic_algorithm_train, play_game, RandomPolicy, load_hof
-from evolutionary_strategy import evolution_strategy_train
 import os
+from agent import Agent
+from genetic_algorithm import genetic_algorithm_train
+from evolutionary_strategy import evolution_strategy_train
+from utils.game_logic_functions import initialize_env
 from supersuit import frame_stack_v1, resize_v1, frame_skip_v0, agent_indicator_v0
+from utils.game_logic_functions import create_agent, play_game, load_agent_for_testing
+from utils.utils_policies import RandomPolicy, PeriodicPolicy, AlwaysFirePolicy
 
 
 
@@ -22,7 +24,7 @@ def parse_arguments():
                         help="Population size for the evolutionary algorithm")
     parser.add_argument("--hof_size", type=int, default=20, 
                         help="Size of the Hall of Fame")
-    parser.add_argument("--atari_game", type=str, choices=["boxing_v2", "pong_v3"], default="pong_v3",
+    parser.add_argument("--game", type=str, choices=["boxing_v2", "pong_v3", "simple_adversary_v3"], default="pong_v3",
                         help="Choose the Atari games to test with")
     parser.add_argument("--initial_mutation_power", type=float, default=0.05, 
                         help="Initial value for the mutation power, i.e. noise standard deviation for weight mutation")
@@ -32,8 +34,6 @@ def parse_arguments():
                         help="Total timesteps per episode")
     parser.add_argument("--max_evaluation_steps", type=int, default=None, 
                         help="Maximum steps for evaluation")
-    parser.add_argument("--input_channels", type=int, default=6, 
-                        help="Number of input channels for the observation")
     parser.add_argument("--elites_number", type=int, default=2, 
                         help="Number of elites for each generation")          
     parser.add_argument("--debug", action="store_true", 
@@ -71,7 +71,7 @@ class Args:
         self.generations = args.generations
         self.population = args.population
         self.hof_size = args.hof_size
-        self.atari_game = args.atari_game
+        self.game = args.game
         self.mutation_power = args.initial_mutation_power
         self.learning_rate = args.learning_rate
         self.max_timesteps_per_episode = args.max_timesteps_per_episode
@@ -83,7 +83,6 @@ class Args:
         self.debug = args.debug
         self.train = args.train
         self.test = args.test
-        self.input_channels = args.input_channels
         self.render = args.render
         self.env_mode = args.env_mode
         self.precision = args.precision
@@ -97,39 +96,18 @@ class Args:
         # Print all attributes except `input_channel`
         attributes = vars(self)  # Get all attributes as a dictionary
         for attr, value in attributes.items():
-            if attr != "input_channels":  # Skip `input_channel`
                 if attr != "elites_number" or args.algorithm=="GA":
                     if attr != "learning_rate" or args.algorithm=="ES":
                         if attr != "ES_model_to_test" or (args.algorithm == "ES" and args.test and not args.train):
                             if attr != "GA_hof_to_test" or (args.algorithm == "GA" and args.test and not args.train):
                                 if attr != "play_against_yourself" or args.test:
-                                    print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                                    if (attr != "max_evaluation_steps" and attr != "max_timesteps_per_episode") or args.game != "simple_adversary_v3":
+                                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
-
-def initialize_env(args):
-    """Initialize the environment based on the chosen mode."""
-    atari_game_module = importlib.import_module(f"pettingzoo.atari.{args.atari_game}")
-    if args.env_mode == "AEC":
-        env = atari_game_module.env(render_mode="human" if args.render else None, obs_type="grayscale_image")
-        env = frame_skip_v0(env, 4)
-        env = resize_v1(env, 84, 84)
-        env = frame_stack_v1(env, 4)
-        env = agent_indicator_v0(env)
-    elif args.env_mode == "parallel":
-        env = atari_game_module.parallel_env(render_mode="human" if args.render else None)
-    else:
-        raise ValueError("Invalid environment mode. Choose either 'AEC' or 'parallel'.")
-    env.reset(seed=1938214)
-    return env
 
 def main():
     
     args = parse_arguments()
-
-    env = initialize_env(args)
-
-    hof = []
-
 
     print("\nHyperparameters and Parameters:")
     args = Args(args)
@@ -141,76 +119,77 @@ def main():
 
         print("Starting Training...")
 
-        agent = env.agents[0]
-        input_channels = env.observation_space(agent).shape[-1]
-        num_actions = env.action_space(agent).n
+        env = initialize_env(args)
 
-        # Train agent using the selected algorithm
         if args.algorithm == "GA":
-            hof = genetic_algorithm_train(env, agent, args)
+            hof = genetic_algorithm_train(env, env.agents[0], args)
         elif args.algorithm == "ES":
-            agent = evolution_strategy_train(env, agent, args)
+            agent = evolution_strategy_train(env, env.agents[0], args)
         else:
             print("Unknown algorithm. Exiting.")
             return
 
         print("Training completed.")
-    env.close()
+        
+        env.close()
 
 
     if args.test:
 
-        if args.algorithm == "ES":
-           
-            if args.ES_model_to_test is not None and not os.path.exists(args.ES_model_to_test):
-                print(f"Error: Model file {args.ES_model_to_test} not found.")
-                return
-                
+        print("Starting Testing...")
+        
+        env = initialize_env(args)
 
-            print(f"Loading model from {args.ES_model_to_test} for testing...")
-            agent = torch.load(args.ES_model_to_test)
+        agent = load_agent_for_testing(args)
+
+        total_rewards = 0
+        test_episodes = 10
+
+        if args.game == "simple_adversary_v3": # cooperative task
+    
+            total_rewards1 = 0
+            total_reward2 = 0
+
+            for episode in range(test_episodes):
+
+                reward1, reward2 = play_game(env=env, player1=agent.model,
+                                                            player2=agent.model, adversary=RandomPolicy(env.action_space(env.agents[0]).n),
+                                                            args=args, eval=True)
+                total_rewards1 += reward1
+                total_reward2 += reward2
+
+            avg_reward1 = total_rewards1 / test_episodes
+            avg_reward2 = total_reward2 / test_episodes
+
+            print(f"\n Average Reward over {test_episodes}: {avg_reward1} and {avg_reward2}")
+
+
+        else: # atari game
+
             total_rewards = 0
-            test_episodes = 10
-            for episode in range(10):
+
+            for episode in range(test_episodes):
 
                 if args.play_against_yourself:
-                    reward, _, timesteps = play_game(env=env, player1=agent.model,
+                    reward, _ = play_game(env=env, player1=agent.model,
                                                 player2=agent.model, 
                                                 args=args, eval=True)
                 else:
-                    reward, _, timesteps = play_game(env=env, player1=agent.model,
+                    reward, _ = play_game(env=env, player1=agent.model,
                                                 player2=RandomPolicy(env.action_space(env.agents[0]).n), 
                                                 args=args, eval=True)
 
-            total_rewards += reward
+                total_rewards += reward
 
             avg_reward = total_rewards / test_episodes
-            print(f"\n Average Reward of Best Model over {test_episodes} Episodes: {avg_reward}")
+        
+            print(f"\n Average Reward over {test_episodes}: {avg_reward}")
 
 
-
-
-        else: # args.algorithm == "GA"
+        print("Testing completed.")  
+        
+        env.close()
             
-            # TODO: TO TEST
-            
-            hof = load_hof(args.model_to_test)
-            env = initialize_env(args)  
-
-            best_model = Agent(args.input_channels, n_actions=env.action_space(env.agents[0]).n, precision=args.precision)
-            best_model.set_weights(hof[-1])
-
-            total_rewards = 0
-            test_episodes = 10
-            for episode in range(10):
-                reward, _, timesteps = play_game(env=env, player1=best_model.model,
-                                            player2=RandomPolicy(env.action_space(env.agents[0]).n), 
-                                            args=args, eval=True)
-            total_rewards += reward
-
-            avg_reward = total_rewards / test_episodes
-            print(f"\n Average Reward of Best Model over {test_episodes} Episodes: {avg_reward}")
-
-
+           
 if __name__ == "__main__":
     main()
