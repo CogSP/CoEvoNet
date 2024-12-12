@@ -59,5 +59,5 @@ TODO
 
 # References
 
-- "Coevolutionary Reinforcement Learning in Multi-Agent Environments",
+- "A coevolutionary approach to deep multi-agent reinforcement learning",
 by Daan Klijn and A.E. Eiben, Vrije Universiteit Amsterdam.
