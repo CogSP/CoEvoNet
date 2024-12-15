@@ -18,9 +18,9 @@ class AtariAgent(Agent):
         # the two agents have the same observation space
         self.input_channels=env.observation_space(env.agents[0]).shape[-1]
         self.n_actions=env.action_space(env.agents[0]).n 
-        self.model = DeepQN(input_channels, n_actions, args.precision)
-        self.optimizer = optim.Adam(model.parameters(), lr=0.0001)
-        super().__init__(model, optimizer, args)
+        self.model = DeepQN(self.input_channels, self.n_actions, args.precision)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
+        super().__init__(self.model, self.optimizer, args)
         
 
     def clone(self, env, args):

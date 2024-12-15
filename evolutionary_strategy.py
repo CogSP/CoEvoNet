@@ -62,7 +62,7 @@ def compute_weight_update(noises, rewards, args, individual_weights=None, popula
     if args.fitness_sharing:
         diversity = diversity_penalty(individual_weights=individual_weights, population_weights=population_weights, args=args)
         # note that diversity is 1 when the sharing function is 0, so I removed the 1 + diversity for just a diversity denominator
-        fitness = rewards / diversity
+        fitness = rewards / (1 + diversity)
     else:
         fitness = rewards
 
@@ -72,7 +72,7 @@ def compute_weight_update(noises, rewards, args, individual_weights=None, popula
 
     weights_update = (args.learning_rate / (len(noises) * args.mutation_power)) * np.dot(np.array(noises).T, normalized_fitness)
 
-    weights_udpate = weights_update.astype(np_dtype)
+    weights_update = weights_update.astype(np_dtype)
 
     return weights_update, diversity
 
@@ -112,7 +112,7 @@ def evolution_strategy_train(env, agent, args, output_dir):
         
         noises = []
         rewards = []
-        population_weights = [base_weights]
+        population_weights = []
 
         for _ in tqdm(range(args.population), desc=f"Generation {gen} - Mutating", leave=False):
             total_reward, noise, mutated_weights = mutate_weights(env, agent, args)

@@ -13,7 +13,7 @@ class Agent:
         self.precision = args.precision
         
 
-    def apply_precision(model, precision):
+    def apply_precision(self, model, precision):
         """Apply the specified precision to the model and default tensor type."""
         if self.precision == "float16":
             self.model = self.model.half()

@@ -5,6 +5,8 @@ import numpy as np
 from MPE.mpe_agent import MPEAgent
 from Atari.atari_agent import AtariAgent
 from utils.utils_policies import RandomPolicy
+from supersuit import frame_stack_v1, resize_v1, frame_skip_v0, agent_indicator_v0
+from PPO.PPOagent import PPOPolicy
 
 
 def diversity_penalty(individual_weights, population_weights, args, sigma=None):
@@ -136,7 +138,7 @@ def play_MPE(env, player1, player2, adversary, args):
         elif agent == "agent_1":
             action = player2.determine_action(obs)  
         elif agent == "adversary_0":
-            action = adversary.determine_action(obs)
+            action, _, _ = adversary.get_action_and_value(obs)
         else:
             raise ValueError(f"Unknown Agent during play_game: {agent}")
         
@@ -163,7 +165,9 @@ def play_game(env, player1, player2, adversary=None, args=None, eval=False):
 
     if args.game == "simple_adversary_v3":
         if adversary is None:
-            adversary = RandomPolicy(env.action_space(env.agents[0]).n)
+            adversary = PPOPolicy(env.observation_space("adversary_0").shape[0], env.action_space("adversary_0").n).to("cpu")
+            adversary.load_state_dict(torch.load("model_adversary_0.pth", map_location="cpu"))
+            adversary.eval()
         rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args)
         return rw_p1, rw_p2
     else:

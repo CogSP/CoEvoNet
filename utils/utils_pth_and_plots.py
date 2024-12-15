@@ -28,11 +28,11 @@ def load_agent_for_testing(args, env=None):
     elif args.algorithm == "ES":
 
         if args.ES_model_to_test is None:
-            print(f"Error: Model file not specified. Please specify the agent to test")
+            raise ValueError(f"Error: Model file not specified. Please specify the agent to test")
             return
             
         if not os.path.exists(args.ES_model_to_test):
-            print(f"Error: Model file {args.ES_model_to_test} not found.")
+            raise ValueError(f"Error: Model file {args.ES_model_to_test} not found.")
             return
 
         print(f"Loading Agent from {args.ES_model_to_test} for testing...")

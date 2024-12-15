@@ -13,8 +13,8 @@ python3.9 main.py \
     --max_evaluation_steps=400 \
     --learning_rate=0.1 \
     --fitness_sharing \
-    --adaptive \
-    --initial_mutation_power=0.05 \
-    --max_mutation_power=0.5 \
-    --min_mutation_power=0.001 \
+    #--adaptive \
+    #--initial_mutation_power=0.05 \
+    #--max_mutation_power=0.5 \
+    #--min_mutation_power=0.001 \
     

@@ -5,8 +5,7 @@ from agent import Agent
 from genetic_algorithm import genetic_algorithm_train
 from evolutionary_strategy import evolution_strategy_train
 from utils.game_logic_functions import initialize_env
-from supersuit import frame_stack_v1, resize_v1, frame_skip_v0, agent_indicator_v0
-from utils.game_logic_functions import create_agent, play_game
+from utils.game_logic_functions import play_game
 from utils.utils_policies import RandomPolicy, PeriodicPolicy, AlwaysFirePolicy
 from utils.utils_pth_and_plots import create_output_dir, load_agent_for_testing
 
@@ -176,7 +175,7 @@ def main():
             for episode in range(test_episodes):
 
                 reward1, reward2 = play_game(env=env, player1=agent.model,
-                                                            player2=agent.model, adversary=RandomPolicy(env.action_space(env.agents[0]).n),
+                                                            player2=agent.model,
                                                             args=args, eval=True)
                 total_rewards1 += reward1
                 total_reward2 += reward2
