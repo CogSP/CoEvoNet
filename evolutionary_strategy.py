@@ -61,7 +61,8 @@ def compute_weight_update(noises, rewards, args, individual_weights=None, popula
     diversity = None
     if args.fitness_sharing:
         diversity = diversity_penalty(individual_weights=individual_weights, population_weights=population_weights, args=args)
-        fitness = rewards / (1 + diversity)
+        # note that diversity is 1 when the sharing function is 0, so I removed the 1 + diversity for just a diversity denominator
+        fitness = rewards / diversity
     else:
         fitness = rewards
 
@@ -79,21 +80,8 @@ def compute_weight_update(noises, rewards, args, individual_weights=None, popula
 def evolution_strategy_train(env, agent, args, output_dir):
     """Train the agent using Evolution Strategies with Elitism and Hall of Fame."""
 
-
-    # Initialize directories and variables for saving
     agent_file = os.path.join(output_dir, "agent.pth")
     
-    """
-    rewards_plot_file = os.path.join(output_dir, "rewards_plot.png")
-    
-    if args.fitness_sharing:
-        diversity_plot_file = os.path.join(output_dir, "diversity_plot.png")
-        fitness_plot_file = os.path.join(output_dir, "fitness_plot.png")
-
-    if args.adaptive:
-        mutation_power_plot_file = os.path.join(output_dir, "mutation_power_plot.png")
-    """
-
     results_plot_file = os.path.join(output_dir, "results_plot_file.png")
 
     agent = create_agent(env, args)
@@ -142,7 +130,7 @@ def evolution_strategy_train(env, agent, args, output_dir):
 
         if args.fitness_sharing:
             diversity_over_generations.append(diversity)
-            evaluation_fitness = evaluation_reward / (1 + diversity) 
+            evaluation_fitness = evaluation_reward / diversity 
             fitness_over_generations.append(evaluation_fitness)
 
         # Dynamic Mutation Power via Reward Feedback
@@ -167,17 +155,5 @@ def evolution_strategy_train(env, agent, args, output_dir):
                                 file_path=results_plot_file,
                                 args=args
                                 )
-
-        
-        """
-        plot_rewards(rewards_over_generations, rewards_plot_file, args, window=average_window)
-
-        if args.fitness_sharing:
-            plot_diversity(diversity_over_generations, diversity_plot_file, args, window=average_window)
-            plot_fitness(fitness_over_generations, fitness_plot_file, args, window=average_window)
-
-        if args.adaptive:
-            plot_mutation_power(mutation_power_history, mutation_power_plot_file, args, window=average_window)
-        """
 
     return agent

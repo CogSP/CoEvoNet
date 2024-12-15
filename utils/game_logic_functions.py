@@ -7,7 +7,7 @@ from Atari.atari_agent import AtariAgent
 from utils.utils_policies import RandomPolicy
 
 
-def diversity_penalty(individual_weights, population_weights, args, sigma=1.0):
+def diversity_penalty(individual_weights, population_weights, args, sigma=None):
 
     distances = []
     for individual in population_weights:
@@ -15,6 +15,16 @@ def diversity_penalty(individual_weights, population_weights, args, sigma=1.0):
         distances.append(distance)
     
     distances = np.array(distances)
+
+    # Dynamically set sigma if not provided
+    # we can think of plotting sigma too
+    if sigma is None:
+        sigma = np.mean(distances)  
+
+    if args.debug:
+        print("Distance Range:", distances.min(), distances.max(), "Sigma:", sigma)
+
+    # if distances > sigma, then sharing function = 0
     sharing_function = np.maximum(0, 1 - distances / sigma)
 
     diversity_scores = np.sum(sharing_function)
