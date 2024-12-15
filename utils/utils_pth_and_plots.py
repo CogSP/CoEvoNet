@@ -2,9 +2,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import torch
+from utils.game_logic_functions import create_agent
 
 
-def load_agent_for_testing(args):
+def load_agent_for_testing(args, env=None):
 
     if args.algorithm == "GA":
 
@@ -17,9 +18,10 @@ def load_agent_for_testing(args):
             return
 
         print(f"Loading HoF from {args.GA_hof_to_test} for testing...")
-        hof = torch.load(file_path)
+        hof = torch.load(args.GA_hof_to_test)
+        best_model_weights = hof[-1].get_weights()
         agent = create_agent(env, args)
-        agent.set_weights(hof[-1])
+        agent.set_weights(best_model_weights)
 
         return agent
 
@@ -47,35 +49,114 @@ def save_model(obj, file_path):
 
 def create_output_dir(args):
     """Create a directory for saving models and plots."""
-    dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_adaptive{args.adaptive}_tslimit{args.max_timesteps_per_episode}"
+    dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_tslimit{args.max_timesteps_per_episode}_fitness-sharing{args.fitness_sharing}_adaptive{args.adaptive}"
+    if args.adaptive:
+        dir_name += f"max_mutation{args.max_mutation_power}_min_mutation{args.min_mutation_power}"
     if args.algorithm == "ES":
         dir_name += f"_lr{args.learning_rate}"
     os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
-def plot_rewards(rewards, file_path, window=10):
+
+def plot_experiment_metrics(rewards=None, mutation_power_history=None, fitness=None, diversity=None, file_path="experiment_metrics.png", args=None):
     """
-    Plot rewards across generations and their moving average over a window.
+    Plot metrics such as rewards, mutation power, fitness, and diversity in a single function.
     
     Args:
         rewards (list): List of total rewards per generation.
+        mutation_power_history (list): List of mutation power values over generations.
+        fitness (list): List of fitness values across generations.
+        diversity (list): List of diversity metrics over generations.
         file_path (str): Path to save the plot.
-        window (int): Window size for calculating the moving average.
+        args: Hyperparameters and config used in the experiment.
     """
-    plt.figure(figsize=(10, 6))
+
+    plt.figure(figsize=(24, 12))
     
-    # Plot raw rewards
-    plt.plot(rewards, marker='o', label="Total Reward")
-    
-    # Calculate moving average
-    if len(rewards) >= window:
-        moving_avg = [np.mean(rewards[max(0, i - window + 1):i + 1]) for i in range(len(rewards))]
-        plt.plot(moving_avg, linestyle='-', label=f"Avg Reward (Last {window})")
-    
-    plt.title("Reward Progression Over Generations")
-    plt.xlabel("Generation")
-    plt.ylabel("Reward")
-    plt.grid(True)
-    plt.legend()
+    # Rewards Plot
+    if rewards is not None:
+        plt.subplot(2, 2, 1)
+        plt.plot(rewards, marker='o', label="Total Reward")
+        if len(rewards) >= args.average_window:
+            moving_avg = [np.mean(rewards[max(0, i - args.average_window + 1):i + 1]) for i in range(len(rewards))]
+            plt.plot(moving_avg, linestyle='-', label=f"Avg Reward (Last {args.average_window})")
+        plt.title("Reward Progression Over Generations")
+        plt.xlabel("Generation")
+        plt.ylabel("Reward")
+        plt.legend()
+        plt.grid(True)
+
+    # Mutation Power Plot
+    if mutation_power_history is not None:
+        plt.subplot(2, 2, 2)
+        generations = range(len(mutation_power_history))
+        plt.plot(generations, mutation_power_history, label="Mutation Power", alpha=0.7)
+        if len(mutation_power_history) >= args.average_window:
+            moving_avg = [np.mean(mutation_power_history[max(0, i - args.average_window + 1):i + 1]) for i in range(len(mutation_power_history))]
+            plt.plot(generations, moving_avg, label=f"Moving Avg (Last {args.average_window})", color="orange", linestyle='-')
+        plt.axhline(args.max_mutation_power, color='r', linestyle='--', label="Max Mutation Power")
+        plt.axhline(args.min_mutation_power, color='b', linestyle='--', label="Min Mutation Power")
+        plt.title("Mutation Power Progression Over Generations")
+        plt.xlabel("Generation")
+        plt.ylabel("Mutation Power")
+        plt.legend()
+        plt.grid(True)
+
+    # Fitness Plot
+    if fitness is not None:
+        plt.subplot(2, 2, 3)
+        plt.plot(fitness, marker='x', label="Fitness")
+        if len(fitness) >= args.average_window:
+            moving_avg = [np.mean(fitness[max(0, i - args.average_window + 1):i + 1]) for i in range(len(fitness))]
+            plt.plot(moving_avg, linestyle='-', label=f"Avg Fitness (Last {args.average_window})")
+        plt.title("Fitness Progression Over Generations")
+        plt.xlabel("Generation")
+        plt.ylabel("Fitness")
+        plt.legend()
+        plt.grid(True)
+
+    # Diversity Plot
+    if diversity is not None:
+        plt.subplot(2, 2, 4)
+        plt.plot(diversity, marker='s', label="Diversity")
+        if len(diversity) >= args.average_window:
+            moving_avg = [np.mean(diversity[max(0, i - args.average_window + 1):i + 1]) for i in range(len(diversity))]
+            plt.plot(moving_avg, linestyle='-', label=f"Avg Diversity (Last {args.average_window})")
+        plt.title("Diversity Progression Over Generations")
+        plt.xlabel("Generation")
+        plt.ylabel("Diversity")
+        plt.legend()
+        plt.grid(True)
+
+    # Add hyperparameters to the figure
+    if args is not None:
+        hyperparams = (
+            f"Algorithm: {args.algorithm}\n"
+            f"Generations: {args.generations}\n"
+            f"Population: {args.population}\n"
+            f"HoF Size: {args.hof_size if hasattr(args, 'hof_size') else 'N/A'}\n"
+            f"Game: {args.game}\n"
+        )
+        if args.adaptive:
+            hyperparams += "Mutation Power: adaptive\n"
+        else:
+            hyperparams += f"Mutation Power: {args.mutation_power}\n"
+
+        if args.algorithm == 'ES':
+            hyperparams += f"Learning Rate: {args.learning_rate}\n"
+
+        if args.fitness_sharing:
+            hyperparams += "Fitness Sharing Enabled\n"
+
+        if args.game != 'simple_adversary_v3':
+            hyperparams += f"Max Timesteps: {args.max_timesteps_per_episode}\n"
+            hyperparams += f"Max Evaluation Steps: {args.max_evaluation_steps}\n"
+
+        if args.algorithm == 'GA':
+            hyperparams += f"Elites: {args.elites_number}\n"
+
+        plt.gcf().text(0.02, 0.5, hyperparams, fontsize=18, ha='left', va='center', bbox=dict(boxstyle="round,pad=1", alpha=0.5))
+
+    plt.tight_layout(rect=[0.2, 0, 1, 1])  # Adjust layout to leave more space for the left-side text box
     plt.savefig(file_path)
     plt.close()

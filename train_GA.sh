@@ -13,3 +13,8 @@ python3.9 main.py \
     --max_timesteps_per_episode=400 \
     --max_evaluation_steps=400 \
     --initial_mutation_power=0.005 \
+    --fitness_sharing \
+    --adaptive \
+    --max_mutation_power=0.7 \
+    --min_mutation_power=0.0001 \
+    

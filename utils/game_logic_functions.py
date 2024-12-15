@@ -1,9 +1,29 @@
+import os
 import importlib
+import torch
+import numpy as np
 from MPE.mpe_agent import MPEAgent
 from Atari.atari_agent import AtariAgent
 from utils.utils_policies import RandomPolicy
-import torch
-import os
+
+
+def diversity_penalty(individual_weights, population_weights, args, sigma=1.0):
+
+    distances = []
+    for individual in population_weights:
+        distance = np.linalg.norm(individual - individual_weights)
+        distances.append(distance)
+    
+    distances = np.array(distances)
+    sharing_function = np.maximum(0, 1 - distances / sigma)
+
+    diversity_scores = np.sum(sharing_function)
+    
+    if args.debug:
+        print(f"diversity_scores = {diversity_scores}")
+        
+    return diversity_scores
+
 
 
 def initialize_env(args):
@@ -132,7 +152,8 @@ def play_game(env, player1, player2, adversary=None, args=None, eval=False):
     env.reset()
 
     if args.game == "simple_adversary_v3":
-        adversary = RandomPolicy(env.action_space(env.agents[0]).n)
+        if adversary is None:
+            adversary = RandomPolicy(env.action_space(env.agents[0]).n)
         rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args)
         return rw_p1, rw_p2
     else:

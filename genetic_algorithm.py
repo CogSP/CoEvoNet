@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from utils.game_logic_functions import create_agent, play_game
-from utils.utils_pth_and_plots import plot_rewards, save_model
+from utils.utils_pth_and_plots import plot_experiment_metrics, save_model
 from utils.game_logic_functions import initialize_env
 from utils.utils_policies import RandomPolicy
 from agent import Agent
@@ -13,9 +13,14 @@ import os
 def evaluate_current_weights(best_agent, env, args):
     """Evaluate the current weights against a random policy."""
     total_reward = 0
+
+    # if MPE, the RP is the adversarial against two instances of the genetic model
+    # and will be instantiated inside play_game
+    player2 = RandomPolicy(env.action_space(env.agents[0]).n) if args.game != "simple_adversary_v3" else best_agent.model
+
     for i in tqdm(range(10), desc="Evaluating best model against 5 dummies", leave=False):  
         reward, _ = play_game(env=env, player1=best_agent.model,
-                                    player2=RandomPolicy(env.action_space(env.agents[0]).n),
+                                    player2=player2,
                                     args=args, eval=True)
         total_reward += reward
 
@@ -55,8 +60,15 @@ def genetic_algorithm_train(env, agent, args, output_dir):
     elite_file = os.path.join(output_dir, "elite_weights.pth")
     rewards_plot_file = os.path.join(output_dir, "rewards_plot.png")
 
+    if args.adaptive:
+        mutation_power_plot_file = os.path.join(output_dir, "mutation_power_plot.png")
+
+
     hof = [create_agent(env, args) for _ in range(args.hof_size)]
     elites = [create_agent(env, args) for _ in range(args.hof_size)]
+
+    total_params = sum(p.numel() for p in hof[0].model.parameters()) 
+    print(f'\nNumber of parameters of each network: {total_params}')
 
     for agent in elites:
         if args.precision == "float16":
@@ -64,7 +76,11 @@ def genetic_algorithm_train(env, agent, args, output_dir):
         else:
             agent.model.float()
 
-    rewards_over_generations = []  # Track rewards for each generation
+    rewards_over_generations = []
+
+    if args.adaptive:
+        mutation_power_history = [args.mutation_power]
+
 
     population = []
     for i in tqdm(range(args.population), desc=f"Creating initial population (n = {args.population})", leave=False):
@@ -166,13 +182,25 @@ def genetic_algorithm_train(env, agent, args, output_dir):
         # Append evaluation reward for plotting
         rewards_over_generations.append(evaluation_reward)
 
-        # adaptive mutation: TODO: PUT IN THE REPORT THAT THIS WAS NOT IN THE PAPER, IT WAS OUR IDEA
+        # Dynamic Mutation Power via Reward Feedback
         if args.adaptive:
-            args.mutation_power = max(0.01, args.mutation_power * 0.95)  # Reduce over generations
+
+            if gen > 10 and np.mean(rewards_over_generations[-10:]) < np.mean(rewards_over_generations[-20:-10]):
+                args.mutation_power = min(args.mutation_power * 1.2, args.max_mutation_power)
+            else:
+                args.mutation_power = max(args.mutation_power * 0.95, args.min_mutation_power)
+
+            mutation_power_history.append(args.mutation_power)
+
 
         # Plot and save rewards progression
         average_window = 50  # Define window for moving average
-        plot_rewards(rewards_over_generations, rewards_plot_file, window=average_window)
+        plot_rewards(rewards_over_generations, rewards_plot_file, args, window=average_window)
+
+        # Plot mutation power if adaptive
+        average_mutation_window = 50
+        if args.adaptive:
+            plot_mutation_power(mutation_power_history, mutation_power_plot_file, args, window=average_mutation_window)
 
     return hof
 

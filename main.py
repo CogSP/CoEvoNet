@@ -52,14 +52,22 @@ def parse_arguments():
     parser.add_argument("--save", action="store_true",
                         help="Save the models")
     parser.add_argument("--adaptive", action="store_true",
-                        help="Enable adaptive mutation power, decreasing over time")
+                        help="Enable Dynamic Mutation Power via Reward Feedback")
+    parser.add_argument("--max_mutation_power", type=float, default=0.2,
+                        help="If adaptive is true, it specifies the max mutation power reachable")
+    parser.add_argument("--min_mutation_power", type=float, default=0.001,
+                        help="If adaptive is true, it specifies the max mutation power reachable")
+    parser.add_argument("--fitness_sharing", action="store_true",
+                        help="If true, reduce Genetic Drift with the Niching technique of fitness sharing")
     parser.add_argument("--ES_model_to_test", type=str, default=None,
                         help="If testing ES, choose the model to test from CLI")
     parser.add_argument("--GA_hof_to_test", type=str, default=None,
                         help="If testing GA, choose the model to test from CLI")
     parser.add_argument("--play_against_yourself", action="store_true",
                         help="If true, the model plays against itself. If false, it plays against a dummy (RandomPolicy)")
-    
+    parser.add_argument("--average_window", type=int, default=None,
+                        help="Choose the window for the running average")
+
     return parser.parse_args()
 
 
@@ -79,6 +87,9 @@ class Args:
         self.max_evaluation_steps = args.max_evaluation_steps
         self.elites_number = args.elites_number
         self.adaptive = args.adaptive
+        self.max_mutation_power = args.max_mutation_power
+        self.min_mutation_power = args.min_mutation_power
+        self.fitness_sharing = args.fitness_sharing
 
         # clearly, these are not hyperparam, but it's easy to have everything inside an object
         self.debug = args.debug
@@ -91,6 +102,14 @@ class Args:
         self.ES_model_to_test = args.ES_model_to_test
         self.GA_hof_to_test = args.GA_hof_to_test
         self.play_against_yourself = args.play_against_yourself
+        if args.average_window != None:
+            if args.average_window > args.generations:
+                raise ValueError(f"The average window must be lower than the total number of generations!")
+            else:
+                self.average_window = args.average_window
+        if args.average_window == None:
+            #self.average_window = args.generations / 10
+            self.average_window = 50
 
 
     def print_attributes(self, args): 
@@ -103,7 +122,8 @@ class Args:
                             if attr != "GA_hof_to_test" or (args.algorithm == "GA" and args.test and not args.train):
                                 if attr != "play_against_yourself" or args.test:
                                     if (attr != "max_evaluation_steps" and attr != "max_timesteps_per_episode") or args.game != "simple_adversary_v3":
-                                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                                        if attr not in ["max_mutation_power", "min_mutation_power"] or args.adaptive:
+                                            print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
 def main():
@@ -142,7 +162,8 @@ def main():
         
         env = initialize_env(args)
 
-        agent = load_agent_for_testing(args)
+        agent = load_agent_for_testing(args, env)
+        print(f"agent = {agent}")
 
         total_rewards = 0
         test_episodes = 10
@@ -165,9 +186,10 @@ def main():
 
             print(f"\n Average Reward over {test_episodes}: {avg_reward1} and {avg_reward2}")
 
-
-        else: # atari game
-
+        else: 
+            
+            # atari game
+            
             total_rewards = 0
 
             for episode in range(test_episodes):
