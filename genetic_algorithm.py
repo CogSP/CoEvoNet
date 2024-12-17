@@ -11,7 +11,6 @@ import os
 
 
 def evaluate_current_weights(best_agent, env, args):
-    """Evaluate the current weights against a random policy."""
     total_reward = 0
 
     # if MPE, the RP is the adversarial against two instances of the genetic model

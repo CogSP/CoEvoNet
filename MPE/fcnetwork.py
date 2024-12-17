@@ -17,20 +17,46 @@ class FCNetwork(nn.Module):
         self.output = nn.Linear(256, n_actions).to(dtype=self.dtype)
         self.layers.append(self.output)
 
-    def forward(self, x):
-        x = x.to(dtype=self.dtype)
-        x = x / 255        
+    def forward(self, x, args):
+        x = x.to(dtype=self.dtype)      
+        
+        if args.debug:
+            print("\nin the forward network")
+            print(f"\n\t input = {input}")
+        
         x = F.relu(self.fc1(x)) 
-        x = F.relu(self.fc2(x)) 
+        
+        if args.debug:
+            print(f"\n\t x = {x}")
+        
+        x = F.relu(self.fc2(x))
+        
+        if args.debug:
+            print(f"\n\t x = {x}") 
+        
         x = self.output(x) 
+        
+
+        if args.debug:
+            print(f"\n\t output = {x}")
+        
         return x
 
     
-    def determine_action(self, inputs):
+    def determine_action(self, inputs, args):
         """ Choose an action based on the observation. We do this by simply
         selecting the action with the highest outputted value. """
-        actions = self.forward(inputs)
-        return [np.argmax(action_set.detach().numpy()) for action_set in actions][0]
+        actions = self.forward(inputs, args)
+        
+        current_best = -float("inf")
+        current_best_position = -1
+        for i in range(len(actions)):
+            
+            if actions[i] > current_best:
+                current_best_position = i
+                current_best = actions[i]
+
+        return current_best_position
 
 
     def get_weights(self, layers=None):

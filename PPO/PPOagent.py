@@ -110,6 +110,8 @@ class PPOAgent:
 
                 self.optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
+
                 self.optimizer.step()
 
                 policy_losses.append(policy_loss.item())

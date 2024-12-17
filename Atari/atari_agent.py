@@ -2,6 +2,7 @@ from agent import Agent
 from Atari.deepqn import DeepQN
 import torch
 import numpy as np
+import torch.optim as optim
 
 
 class AtariAgent(Agent):

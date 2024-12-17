@@ -28,7 +28,7 @@ class Agent:
             noise = torch.normal(0, noise_std, size=param.size()).to(param.device)
             param.data += noise
 
-    def mutate_ES(self, args):
+    def mutate_ES(self, args, role):
         """
         Mutates the weights of the model using a normal distribution.
 
@@ -38,8 +38,18 @@ class Agent:
         Returns:
             dict: A dictionary of perturbations applied to the weights.
         """
+
+        if role == "agent_0":
+            mutation_power = args.mutation_power_agent_0
+
+        if role == "agent_1":
+            mutation_power = args.mutation_power_agent_1
+
+        if role == "adversary_0":
+            mutation_power = args.mutation_power_adversary
+
         weights = self.model.get_perturbable_weights()
-        noise = np.random.normal(loc=0.0, scale=args.mutation_power, size=len(weights))
+        noise = np.random.normal(loc=0.0, scale=mutation_power, size=len(weights))
         self.model.set_perturbable_weights(weights + noise, args)
         
 

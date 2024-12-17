@@ -27,18 +27,36 @@ def load_agent_for_testing(args, env=None):
 
     elif args.algorithm == "ES":
 
-        if args.ES_model_to_test is None:
-            raise ValueError(f"Error: Model file not specified. Please specify the agent to test")
+        if args.ES_model_to_test_agent_0 is None:
+            raise ValueError(f"Error: Model file for agent_0 not specified. Please specify the agent to test")
             return
-            
-        if not os.path.exists(args.ES_model_to_test):
-            raise ValueError(f"Error: Model file {args.ES_model_to_test} not found.")
+        
+        if args.ES_model_to_test_agent_1 is None:
+            raise ValueError(f"Error: Model file for agent_1 not specified. Please specify the agent to test")
+            return
+        
+        if args.ES_model_to_test_adversary_0 is None:
+            raise ValueError(f"Error: Model file for adversary_0 not specified. Please specify the agent to test")
             return
 
-        print(f"Loading Agent from {args.ES_model_to_test} for testing...")
-        agent = torch.load(args.ES_model_to_test)
+        if not os.path.exists(args.ES_model_to_test_agent_0):
+            raise ValueError(f"Error: Model file {args.ES_model_to_test_agent_0} not found.")
+            return
 
-        return agent
+        if not os.path.exists(args.ES_model_to_test_agent_1):
+            raise ValueError(f"Error: Model file {args.ES_model_to_test_agent_1} not found.")
+            return
+
+        if not os.path.exists(args.ES_model_to_test_adversary_0):
+            raise ValueError(f"Error: Model file {args.ES_model_to_test_adversary_0} not found.")
+            return
+
+        print(f"Loading Agents for testing...")
+        agent_0 = torch.load(args.ES_model_to_test_agent_0)
+        agent_1 = torch.load(args.ES_model_to_test_agent_1)
+        adversary = torch.load(args.ES_model_to_test_adversary_0)
+
+        return agent_0, agent_1, adversary
 
 
 
@@ -49,11 +67,16 @@ def save_model(obj, file_path):
 
 def create_output_dir(args):
     """Create a directory for saving models and plots."""
-    dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_mut{args.mutation_power}_tslimit{args.max_timesteps_per_episode}_fitness-sharing{args.fitness_sharing}_adaptive{args.adaptive}"
+
+    # TODO: add mutation power
+
+    dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_tslimit{args.max_timesteps_per_episode}_fitness-sharing{args.fitness_sharing}_adaptive{args.adaptive}"
     if args.adaptive:
         dir_name += f"max_mutation{args.max_mutation_power}_min_mutation{args.min_mutation_power}"
     if args.algorithm == "ES":
         dir_name += f"_lr{args.learning_rate}"
+    if args.game == "simple_adversary_v3":
+        dir_name += f"adversary{args.adversary}"
     os.makedirs(dir_name, exist_ok=True)
     return dir_name
 
@@ -147,6 +170,14 @@ def plot_experiment_metrics(rewards=None, mutation_power_history=None, fitness=N
 
         if args.fitness_sharing:
             hyperparams += "Fitness Sharing Enabled\n"
+
+        if args.early_stopping:
+            hyperparams += "Early Stopping Enabled\n"
+            hyperparams += f"Patience: {args.patience}\n"
+            hyperparams += f"Min Delta: {args.min_delta}\n"
+
+        if args.game == "simple_adversary_v3":
+            hyperparams += f"Adversary: {args.adversary}"
 
         if args.game != 'simple_adversary_v3':
             hyperparams += f"Max Timesteps: {args.max_timesteps_per_episode}\n"

@@ -17,4 +17,3 @@ python3.9 main.py \
     --adaptive \
     --max_mutation_power=0.7 \
     --min_mutation_power=0.0001 \
-    
