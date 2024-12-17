@@ -5,9 +5,9 @@ python3.9 main.py \
     --train \
     --save \
     --generations=500 \
-    --population=200 \
+    --population=30 \
     --hof_size=1 \
-    --precision=float16 \
+    --precision=float32 \
     --game=simple_adversary_v3 \
     --max_timesteps_per_episode=400 \
     --max_evaluation_steps=400 \
@@ -20,4 +20,3 @@ python3.9 main.py \
     --max_mutation_power=0.5 \
     --min_mutation_power=0.001 \
     --early_stopping \
-    --adversary=Random \

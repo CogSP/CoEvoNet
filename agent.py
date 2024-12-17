@@ -28,7 +28,7 @@ class Agent:
             noise = torch.normal(0, noise_std, size=param.size()).to(param.device)
             param.data += noise
 
-    def mutate_ES(self, args, role):
+    def mutate_ES(self, args, role, step, weights_logging_agent_0, weights_logging_agent_1, weights_logging_adversary):
         """
         Mutates the weights of the model using a normal distribution.
 
@@ -63,6 +63,9 @@ class Agent:
         # Set the mutated weights back to the model
         #print(f"weights = {weights.keys()}")
         self.model.set_perturbable_weights(weights)"""
+
+
+        self.log_weight_statistics(step=step, weights_logging_agent_0=weights_logging_agent_0, weights_logging_agent_1=weights_logging_agent_1, weights_logging_adversary=weights_logging_adversary, role=role)
 
         return noise
 

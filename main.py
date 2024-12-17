@@ -80,8 +80,8 @@ def parse_arguments():
                         help="Choose how many epochs to wait without improvements before stopping")
     parser.add_argument("--min_delta", type=float, default=0.1,
                         help="Choose the minimum amount of improvement that should be considered as relevant")
-    parser.add_argument("--adversary", type=str, default="Random",
-                        help="If MPE simple adversary game is chosen, choose the adversary policy")
+    #parser.add_argument("--adversary", type=str, default="Random",
+                        #help="If MPE simple adversary game is chosen, choose the adversary policy")
 
 
     return parser.parse_args()
@@ -111,7 +111,7 @@ class Args:
         self.early_stopping = args.early_stopping
         self.patience = args.patience
         self.min_delta = args.min_delta
-        self.adversary = args.adversary
+        #self.adversary = args.adversary
 
         # clearly, these are not hyperparam, but it's easy to have everything inside an object
         self.debug = args.debug

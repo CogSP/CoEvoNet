@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from itertools import chain
 
+
 class FCNetwork(nn.Module):
 
     def __init__(self, input_channels, n_actions, precision):
@@ -17,25 +18,38 @@ class FCNetwork(nn.Module):
         self.output = nn.Linear(256, n_actions).to(dtype=self.dtype)
         self.layers.append(self.output)
 
+
+
+
     def forward(self, x, args):
+
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: input contains inf or NaN")
+
         x = x.to(dtype=self.dtype)      
-        
+
         if args.debug:
             print("\nin the forward network")
             print(f"\n\t input = {input}")
         
         x = F.relu(self.fc1(x)) 
         
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: output contains inf or NaN after fc1")
+
+
         if args.debug:
             print(f"\n\t x = {x}")
         
         x = F.relu(self.fc2(x))
-        
+
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: output contains inf or NaN after fc2")
+
+
         if args.debug:
             print(f"\n\t x = {x}") 
-        
+
         x = self.output(x) 
-        
+
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: output contains inf or NaN")
 
         if args.debug:
             print(f"\n\t output = {x}")
@@ -50,11 +64,15 @@ class FCNetwork(nn.Module):
         
         current_best = -float("inf")
         current_best_position = -1
+        
+
         for i in range(len(actions)):
-            
             if actions[i] > current_best:
                 current_best_position = i
                 current_best = actions[i]
+
+        if current_best_position == -1:
+            raise ValueError(f"ERROR: current_best_position = {current_best_position} after checking for best action, the action probabilities are {actions}")
 
         return current_best_position
 
@@ -221,6 +239,7 @@ class FCNetwork(nn.Module):
         noise = np.random.normal(loc=0.0, scale=mutation_power, size=weights.shape).astype(np.float16 if self.precision=="float16" else np.float32)
 
         self.set_perturbable_weights(weights + noise)
+        
         return noise
 
         

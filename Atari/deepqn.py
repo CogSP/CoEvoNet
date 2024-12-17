@@ -55,7 +55,6 @@ class DeepQN(nn.Module):
         current_best = -float("inf")
         current_best_position = -1
         for i in range(len(actions)):
-            
             if actions[i] > current_best:
                 current_best_position = i
                 current_best = actions[i]

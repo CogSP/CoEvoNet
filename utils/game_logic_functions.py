@@ -121,7 +121,7 @@ def play_atari(env, player1, player2, args):
 
 
 
-def play_MPE(env, player1, player2, adversary, args):
+def play_MPE(env, player1, player2, adversary, args, eval):
 
     rewards = {"agent_0": 0, "agent_1": 0, "adversary_0": 0}
     timesteps = 0
@@ -129,6 +129,9 @@ def play_MPE(env, player1, player2, adversary, args):
     done = False
 
     for agent in env.agent_iter():
+
+        # if eval:
+        #     print(f"\nagent = {agent}")
 
         if args.debug:
             print(f"\nfor {agent}:")
@@ -141,15 +144,25 @@ def play_MPE(env, player1, player2, adversary, args):
         action = None
 
         obs = preprocess_observation(obs, args)
+
+        # if eval:
+        #     print(f"\n obs = {obs}")
+        
+        
         if agent == "agent_0":
             action = player1.determine_action(obs, args)
         elif agent == "agent_1":
             action = player2.determine_action(obs, args)  
         elif agent == "adversary_0":
+
+            """
             if args.adversary == "PPO":
                 action, _, _ = adversary.get_action_and_value(obs)
             elif args.adversary == "Random":
                 action = adversary.determine_action(obs, args)
+            """
+            action = adversary.determine_action(obs, args)
+
         else:
             raise ValueError(f"Unknown Agent during play_game: {agent}")
         
@@ -157,9 +170,20 @@ def play_MPE(env, player1, player2, adversary, args):
         if args.debug:
             print(f"\n\t action chosen = {action}")
 
+        if action == -1:
+            print("\nthe action is -1, I don't know why")
+            print(f"\nobs = {obs}")
+
+        if action > 4:
+            raise ValueError(f"ERROR: the action {action} is greater than 4")
+
         env.step(action)    
         
         _, reward, termination, truncation, _ = env.last()
+
+
+        # if eval:
+        #     print(f"\n reward = {reward}")
 
         if args.debug:
             print(f"\n\t reward = {reward}, termination = {termination}, truncation = {truncation}")
@@ -173,16 +197,17 @@ def play_MPE(env, player1, player2, adversary, args):
     
         if timesteps_limit is not None and timesteps >= timesteps_limit:
             
-            if args.debug:
-                print(f"\ntimesteps limit {timesteps} reached")
-            
+            # if eval:
+            #     print("times'up")
+           
             break
 
         if termination or truncation:
-            
-            if args.debug:
-                print(f"\ntermination or truncation is True")
-            
+
+
+            # if eval:
+            #     print("termination or truncation")
+
             break
          
     return rewards["agent_0"], rewards["agent_1"], rewards["adversary_0"]
@@ -195,11 +220,11 @@ def play_game(env, player1, player2, adversary=None, args=None, eval=False):
     if args.game == "simple_adversary_v3":
 
         if adversary is not None:
-            rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args)
+            rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args, eval)
             return rw_p1, rw_p2, rw_adv
         else:
             raise ValueError("adversary not specified")
     else:
-        rw_p1, rw_p2 = play_atari(env, player1, player2, args) 
+        rw_p1, rw_p2 = play_atari(env, player1, player2, args, eval) 
         return rw_p1, rw_p2
     

@@ -4,6 +4,8 @@ import torch
 import torch.optim as optim
 import numpy as np
 
+
+
 class MPEAgent(Agent):
 
     def __init__(self, env, args, role):
@@ -24,3 +26,26 @@ class MPEAgent(Agent):
         clone = MPEAgent(env, args, role)
         clone.model.load_state_dict(self.model.state_dict())
         return clone
+
+    def log_weight_statistics(self, step, weights_logging_agent_0=None, weights_logging_agent_1=None, weights_logging_adversary=None, role=None):
+        """
+        Logs summary statistics of the perturbable weights.
+        
+        Args:
+            step (int, optional): The current step or mutation number for reference.
+        """
+        weights = self.model.get_perturbable_weights()
+        mean = weights.mean()
+        std = weights.std()
+        min_val = weights.min()
+        max_val = weights.max()
+        
+        weights = {"step": step, "mean": mean, "min": min_val, "max": max_val, "std": std}
+
+        if role == "agent_0":
+            weights_logging_agent_0.append(weights)
+        if role == "agent_1":
+            weights_logging_agent_1.append(weights)
+        if role == "adversary_0":
+            weights_logging_adversary.append(weights)
+        

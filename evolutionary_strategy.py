@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from utils.game_logic_functions import play_game, create_agent, diversity_penalty
 from utils.utils_policies import RandomPolicy
-from utils.utils_pth_and_plots import plot_experiment_metrics, save_model
+from utils.utils_pth_and_plots import plot_experiment_metrics, plot_weights_logging, save_model
 from agent import Agent
 from tqdm import tqdm
 import os
@@ -19,12 +19,24 @@ def get_numpy_dtype(precision):
         # Default to float32 if unsupported precision is given
         return np.float32
 
-def evaluate_current_weights(agent_0, agent_1, adversary, env, args, role):
+def evaluate_current_weights(agent_0, agent_1, adversary, env, args):
     
-    total_reward = 0
+    total_reward_agent_0 = 0
+    total_reward_agent_1 = 0
+    total_reward_adversary = 0
 
-    for _ in tqdm(range(args.max_evaluation_steps), desc="Evaluating weights", leave=False): 
+    for _ in tqdm(range(10), desc="Evaluating weights", leave=False): 
 
+        rw_agent_0, rw_agent_1, rw_adversary = play_game(env=env, player1=agent_0.model,
+                                        player2=agent_1.model, adversary=adversary.model,
+                                        args=args, eval=True)
+
+        total_reward_agent_0 += rw_agent_0
+        total_reward_agent_1 += rw_agent_1
+        total_reward_adversary += rw_adversary
+            
+
+        """
         if role == "agent_0":
             rw_agent_0, _, _ = play_game(env=env, player1=agent_0.model,
                                         player2=agent_1.model, adversary=adversary.model,
@@ -42,18 +54,23 @@ def evaluate_current_weights(agent_0, agent_1, adversary, env, args, role):
                                         player2=agent_1.model, adversary=adversary.model,
                                         args=args, eval=True)
             total_reward += rw_adversary
+        """
 
-    return total_reward / 10
+    return total_reward_agent_0 / 10, total_reward_agent_1 / 10, total_reward_adversary / 10
 
 
-def mutate_weights(env, agent_0, agent_1, adversary, args, role):
+
+def mutate_weights(env, agent_0, agent_1, adversary, args, role, step, weights_logging_agent_0, weights_logging_agent_1, weights_logging_adversary):
     """Apply Gaussian noise to the weights."""
 
     if role == "agent_0":
+
+        if args.debug:
+            print("\n mutating agent_0:")
         
         np_dtype = get_numpy_dtype(args.precision)
         mutated_agent = agent_0.clone(env, args, role="agent_0")
-        perturbations = mutated_agent.mutate_ES(args, role="agent_0")
+        perturbations = mutated_agent.mutate_ES(args, role="agent_0", step=step, weights_logging_agent_0=weights_logging_agent_0, weights_logging_agent_1=weights_logging_agent_1, weights_logging_adversary=weights_logging_adversary)
         perturbations = perturbations.astype(np_dtype)
         mutated_weights = mutated_agent.model.get_weights_ES()
 
@@ -64,28 +81,38 @@ def mutate_weights(env, agent_0, agent_1, adversary, args, role):
         return mutated_agent_0_reward, perturbations, mutated_weights
 
     elif role == "agent_1":
+
+        if args.debug:
+            print("\n mutating agent_1:")
         
         np_dtype = get_numpy_dtype(args.precision)
         mutated_agent = agent_1.clone(env, args, role="agent_1")
-        perturbations = mutated_agent.mutate_ES(args, role="agent_1")
+        perturbations = mutated_agent.mutate_ES(args, role="agent_1", step=step, weights_logging_agent_0=weights_logging_agent_0, weights_logging_agent_1=weights_logging_agent_1, weights_logging_adversary=weights_logging_adversary)
         perturbations = perturbations.astype(np_dtype)
         mutated_weights = mutated_agent.model.get_weights_ES()
 
-        mutated_agent_1_reward, _, _ = play_game(env=env, player1=agent_0.model, player2=mutated_agent.model, adversary=adversary.model, args=args)
+        _, mutated_agent_1_reward, _ = play_game(env=env, player1=agent_0.model, player2=mutated_agent.model, adversary=adversary.model, args=args)
         
         return mutated_agent_1_reward, perturbations, mutated_weights
 
 
     elif role == "adversary_0":
+
+        if args.debug:
+            print("\n mutating adversary:")
         
+
         np_dtype = get_numpy_dtype(args.precision)
         mutated_agent = adversary.clone(env, args, role="adversary_0")
-        perturbations = mutated_agent.mutate_ES(args, role="adversary_0")
+        perturbations = mutated_agent.mutate_ES(args, role="adversary_0", step=step, weights_logging_agent_0=weights_logging_agent_0, weights_logging_agent_1=weights_logging_agent_1, weights_logging_adversary=weights_logging_adversary)
         perturbations = perturbations.astype(np_dtype)
         mutated_weights = mutated_agent.model.get_weights_ES()
 
-        mutated_adversary_reward, _, _ = play_game(env=env, player1=agent_0.model, player2=agent_1.model, adversary=mutated_agent.model, args=args)
-        
+        _, _, mutated_adversary_reward = play_game(env=env, player1=agent_0.model, player2=agent_1.model, adversary=mutated_agent.model, args=args)
+
+        if args.debug:  
+            print(f"\n mutated_adversary_reward = {mutated_adversary_reward}")
+
         return mutated_adversary_reward, perturbations, mutated_weights
 
 
@@ -131,6 +158,7 @@ def evolution_strategy_train(env, args, output_dir):
     results_plot_file_agent_0 = os.path.join(output_dir, "results_plot_file_agent_0.png")
     results_plot_file_agent_1 = os.path.join(output_dir, "results_plot_file_agent_1.png")
     results_plot_file_adversary = os.path.join(output_dir, "results_plot_file_adversary.png")
+    weights_results_plot_file = os.path.join(output_dir, "weights_results_plot_file.png")
 
     agent_0 = create_agent(env, args, role="agent_0")
     agent_1 = create_agent(env, args, role="agent_1")
@@ -151,6 +179,9 @@ def evolution_strategy_train(env, args, output_dir):
     rewards_over_generations_agent_0 = []
     rewards_over_generations_agent_1 = []
     rewards_over_generations_adversary = []
+    weights_logging_agent_0 = []
+    weights_logging_agent_1 = []
+    weights_logging_adversary = []
 
 
     if args.fitness_sharing:
@@ -179,14 +210,14 @@ def evolution_strategy_train(env, args, output_dir):
         mutation_power_history_adversary = None
 
 
-    """
-    # Early stopping variables
-    best_reward = -float("inf")
-    no_improvement_count = 0
-    patience = args.patience
-    min_delta = args.min_delta
-    early_stopping = args.early_stopping
-    """
+    if args.early_stopping:
+        best_reward_agent_0 = -float("inf")
+        no_improvement_count_agent_0 = 0
+        best_reward_agent_1 = -float("inf")
+        no_improvement_count_agent_1 = 0
+        best_reward_adversary = -float("inf")
+        no_improvement_count_adversary = 0
+    
 
     for gen in tqdm(range(args.generations), desc="Training Generations"):
         
@@ -204,22 +235,22 @@ def evolution_strategy_train(env, args, output_dir):
 
         for _ in tqdm(range(args.population), desc=f"Generation {gen} - Mutating", leave=False):
 
-            total_reward_agent_0, noise_agent_0, mutated_weights_agent_0 = mutate_weights(env, agent_0, agent_1, adversary, args, "agent_0")
+            total_reward_agent_0, noise_agent_0, mutated_weights_agent_0 = mutate_weights(env, agent_0, agent_1, adversary, args, "agent_0", gen, weights_logging_agent_0, weights_logging_agent_1, weights_logging_adversary)
             noises_agent_0.append(noise_agent_0)
             rewards_agent_0.append(total_reward_agent_0)
             population_weights_agent_0.append(mutated_weights_agent_0)
 
-            total_reward_agent_1, noise_agent_1, mutated_weights_agent_1 = mutate_weights(env, agent_0, agent_1, adversary, args, "agent_1")
+            total_reward_agent_1, noise_agent_1, mutated_weights_agent_1 = mutate_weights(env, agent_0, agent_1, adversary, args, "agent_1", gen, weights_logging_agent_0, weights_logging_agent_1, weights_logging_adversary)
             noises_agent_1.append(noise_agent_1)
             rewards_agent_1.append(total_reward_agent_1)
             population_weights_agent_1.append(mutated_weights_agent_1)
 
-            total_reward_adversary, noise_adversary, mutated_weights_adversary = mutate_weights(env, agent_0, agent_1, adversary, args, "adversary_0")
+            total_reward_adversary, noise_adversary, mutated_weights_adversary = mutate_weights(env, agent_0, agent_1, adversary, args, "adversary_0", gen, weights_logging_agent_0, weights_logging_agent_1, weights_logging_adversary)
             noises_adversary.append(noise_adversary)
             rewards_adversary.append(total_reward_adversary)
             population_weights_adversary.append(mutated_weights_adversary)
-      
 
+      
         # compute the update for all of the three agents
         weight_update_agent_0, diversity_agent_0 = compute_weight_update(noises_agent_0, rewards_agent_0, args, role="agent_0", individual_weights=base_weights_agent_0, population_weights=population_weights_agent_0)
         weight_update_agent_1, diversity_agent_1 = compute_weight_update(noises_agent_1, rewards_agent_1, args, role="agent_1", individual_weights=base_weights_agent_1, population_weights=population_weights_agent_1)
@@ -233,9 +264,12 @@ def evolution_strategy_train(env, args, output_dir):
         agent_1.model.set_weights_ES(flat_weights=base_weights_agent_1, args=args)
         adversary.model.set_weights_ES(flat_weights=base_weights_adversary, args=args)
 
+        """
         evaluation_reward_agent_0 = evaluate_current_weights(agent_0, agent_1, adversary, env, args, role="agent_0")
         evaluation_reward_agent_1 = evaluate_current_weights(agent_0, agent_1, adversary, env, args, role="agent_1")
         evaluation_reward_adversary = evaluate_current_weights(agent_0, agent_1, adversary, env, args, role="adversary_0")
+        """
+        evaluation_reward_agent_0, evaluation_reward_agent_1, evaluation_reward_adversary = evaluate_current_weights(agent_0, agent_1, adversary, env, args) 
 
         rewards_over_generations_agent_0.append(evaluation_reward_agent_0)
         rewards_over_generations_agent_1.append(evaluation_reward_agent_1)
@@ -253,8 +287,6 @@ def evolution_strategy_train(env, args, output_dir):
             diversity_over_generations_adversary.append(diversity_adversary)
             evaluation_fitness_adversary = evaluation_reward_adversary / (1 + diversity_adversary)
             fitness_over_generations_adversary.append(evaluation_fitness_adversary)
-
-
 
         # Dynamic Mutation Power via Reward Feedback
         if args.adaptive:
@@ -284,21 +316,43 @@ def evolution_strategy_train(env, args, output_dir):
             mutation_power_history_adversary.append(args.mutation_power_adversary)
 
 
-        """
+        
         # Check for improvement for early stopping
-        if early_stopping:
+        if args.early_stopping:
             # If the improvement is larger than min_delta, reset no_improvement_count
-            if evaluation_reward > best_reward + min_delta:
-                best_reward = evaluation_reward
-                no_improvement_count = 0
+            if evaluation_reward_agent_0 > best_reward_agent_0 + args.min_delta:
+                best_reward_agent_0 = evaluation_reward_agent_0
+                no_improvement_count_agent_0 = 0
             else:
-                no_improvement_count += 1
+                no_improvement_count_agent_0 += 1
+        
+            if evaluation_reward_agent_1 > best_reward_agent_1 + args.min_delta:
+                best_reward_agent_1 = evaluation_reward_agent_1
+                no_improvement_count_agent_1 = 0
+            else:
+                no_improvement_count_agent_1 += 1
+        
 
+            if evaluation_reward_adversary > best_reward_adversary + args.min_delta:
+                best_reward_adversary = evaluation_reward_adversary
+                no_improvement_count_adversary = 0
+            else:
+                no_improvement_count_adversary += 1
+        
             # If no improvement for 'patience' generations, stop training
-            if no_improvement_count >= patience:
-                print(f"Early stopping triggered at generation {gen}. Best reward: {best_reward}")
+            if no_improvement_count_agent_0 >= args.patience:
+                print(f"Early stopping triggered at generation {gen} for agent_0. Best reward: {best_reward_agent_0}")
                 break
-        """
+        
+            # If no improvement for 'patience' generations, stop training
+            if no_improvement_count_agent_1 >= args.patience:
+                print(f"Early stopping triggered at generation {gen} for agent_1. Best reward: {best_reward_agent_1}")
+                break
+            
+            # If no improvement for 'patience' generations, stop training
+            if no_improvement_count_adversary >= args.patience:
+                print(f"Early stopping triggered at generation {gen} for adversary. Best reward: {best_reward_adversary}")
+                break
 
         # Save agent and plot rewards at each generation
         if args.save:
@@ -332,6 +386,9 @@ def evolution_strategy_train(env, args, output_dir):
                                 file_path=results_plot_file_adversary,
                                 args=args
                                 )
+
+
+        plot_weights_logging(weights_results_plot_file, weights_logging_agent_0, weights_logging_agent_1, weights_logging_adversary)
 
 
     return agent_0, agent_1, adversary
