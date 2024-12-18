@@ -47,11 +47,20 @@ class DeepQN(nn.Module):
         x = self.output(x)
         return x
     
-    def determine_action(self, inputs):
+    def determine_action(self, inputs, args):
         """ Choose an action based on the observation. We do this by simply
         selecting the action with the highest outputted value. """
-        actions = self.forward(inputs)
-        return [np.argmax(action_set.detach().numpy()) for action_set in actions][0]
+        actions = self.forward(inputs, args)
+        
+        current_best = -float("inf")
+        current_best_position = -1
+        for i in range(len(actions)):
+            if actions[i] > current_best:
+                current_best_position = i
+                current_best = actions[i]
+
+        return current_best_position
+
 
 
     def get_weights(self, layers=None):

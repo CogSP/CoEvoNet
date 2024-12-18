@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 from itertools import chain
 
+
+
 class FCNetwork(nn.Module):
 
     def __init__(self, input_channels, n_actions, precision):
@@ -11,26 +13,81 @@ class FCNetwork(nn.Module):
         self.dtype = torch.float16 if precision == "float16" else torch.float32
         self.layers = []
         self.fc1 = nn.Linear(input_channels, 512).to(dtype=self.dtype)
+        self.ln1 = nn.LayerNorm(512)
         self.layers.append(self.fc1)
         self.fc2 = nn.Linear(512, 256).to(dtype=self.dtype)
+        self.ln2 = nn.LayerNorm(256)
         self.layers.append(self.fc2)
         self.output = nn.Linear(256, n_actions).to(dtype=self.dtype)
         self.layers.append(self.output)
 
-    def forward(self, x):
-        x = x.to(dtype=self.dtype)
-        x = x / 255        
-        x = F.relu(self.fc1(x)) 
-        x = F.relu(self.fc2(x)) 
+        # Apply orthonormal initialization 
+        #self._initialize_weights()
+        
+    """
+    def _initialize_weights(self): 
+        for layer in self.layers: 
+            if isinstance(layer, nn.Linear): 
+                nn.init.orthogonal_(layer.weight) 
+                if layer.bias is not None: 
+                    nn.init.zeros_(layer.bias)
+    """
+
+
+    def forward(self, x, args):
+
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: input contains inf or NaN")
+
+        x = x.to(dtype=self.dtype)      
+
+        if args.debug:
+            print("\nin the forward network")
+            print(f"\n\t input = {input}")
+        
+        x = F.relu(self.ln1(self.fc1(x))) 
+        
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: output contains inf or NaN after fc1")
+
+
+        if args.debug:
+            print(f"\n\t x = {x}")
+        
+        x = F.relu(self.ln2(self.fc2(x)))
+
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: output contains inf or NaN after fc2")
+
+
+        if args.debug:
+            print(f"\n\t x = {x}") 
+
         x = self.output(x) 
+
+        if torch.isinf(x).any() or torch.isnan(x).any(): raise ValueError("\n\t Warning: output contains inf or NaN")
+
+        if args.debug:
+            print(f"\n\t output = {x}")
+        
         return x
 
     
-    def determine_action(self, inputs):
+    def determine_action(self, inputs, args):
         """ Choose an action based on the observation. We do this by simply
         selecting the action with the highest outputted value. """
-        actions = self.forward(inputs)
-        return [np.argmax(action_set.detach().numpy()) for action_set in actions][0]
+        actions = self.forward(inputs, args)
+        
+        current_best = -float("inf")
+        current_best_position = -1
+        
+
+        for i in range(len(actions)):
+            if actions[i] > current_best:
+                current_best_position = i
+                current_best = actions[i]
+
+        if current_best_position == -1:
+            raise ValueError(f"ERROR: current_best_position = {current_best_position} after checking for best action, the action probabilities are {actions}")
+
+        return current_best_position
 
 
     def get_weights(self, layers=None):
@@ -100,7 +157,7 @@ class FCNetwork(nn.Module):
 
 
     def get_weights_ES(self, layers=None):
-        """ Retrieve all the weights of the network. (For ES)"""
+        """ Retrieve all the weights of the network. (Actually, this is not used only for ES)"""
         layers = layers if layers else self.layers
         #print(f"layers = {layers}")
 
@@ -136,7 +193,7 @@ class FCNetwork(nn.Module):
         for name, layer in self.named_modules():
             if name == "":
                 continue # skip the root module
-            if not isinstance(layer, nn.BatchNorm2d):
+            if not isinstance(layer, nn.LayerNorm):
                 layers.append(layer)
         #print(f"names = {names}")
         return layers
@@ -184,7 +241,7 @@ class FCNetwork(nn.Module):
 
     def set_perturbable_weights(self, weights_to_set, args):
         """ Set all the perturbable weights of the network. This excludes setting
-        the BatchNorm weights. """
+        the LayerNorm weights. """
         self.set_weights_ES(weights_to_set, args, self.get_perturbable_layers())
 
 
@@ -195,6 +252,7 @@ class FCNetwork(nn.Module):
         noise = np.random.normal(loc=0.0, scale=mutation_power, size=weights.shape).astype(np.float16 if self.precision=="float16" else np.float32)
 
         self.set_perturbable_weights(weights + noise)
+        
         return noise
 
         

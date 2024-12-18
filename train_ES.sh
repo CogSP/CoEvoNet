@@ -4,8 +4,8 @@ python3.9 main.py \
     --algorithm=ES \
     --train \
     --save \
-    --generations=5000 \
-    --population=200 \
+    --generations=500 \
+    --population=20 \
     --hof_size=1 \
     --precision=float16 \
     --game=simple_adversary_v3 \
@@ -13,8 +13,10 @@ python3.9 main.py \
     --max_evaluation_steps=400 \
     --learning_rate=0.1 \
     --fitness_sharing \
-    #--adaptive \
-    #--initial_mutation_power=0.05 \
-    #--max_mutation_power=0.5 \
-    #--min_mutation_power=0.001 \
-    
+    --adaptive \
+    --initial_mutation_power_agent_0=0.05 \
+    --initial_mutation_power_agent_1=0.05 \
+    --initial_mutation_power_adversary=0.05 \
+    --max_mutation_power=0.5 \
+    --min_mutation_power=0.001 \
+    --early_stopping \

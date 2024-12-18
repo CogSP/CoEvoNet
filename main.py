@@ -26,7 +26,11 @@ def parse_arguments():
                         help="Size of the Hall of Fame")
     parser.add_argument("--game", type=str, choices=["boxing_v2", "pong_v3", "simple_adversary_v3"], default="pong_v3",
                         help="Choose the Atari games to test with")
-    parser.add_argument("--initial_mutation_power", type=float, default=0.05, 
+    parser.add_argument("--initial_mutation_power_agent_0", type=float, default=0.05, 
+                        help="Initial value for the mutation power, i.e. noise standard deviation for weight mutation")
+    parser.add_argument("--initial_mutation_power_agent_1", type=float, default=0.05, 
+                        help="Initial value for the mutation power, i.e. noise standard deviation for weight mutation")
+    parser.add_argument("--initial_mutation_power_adversary", type=float, default=0.05, 
                         help="Initial value for the mutation power, i.e. noise standard deviation for weight mutation")
     parser.add_argument("--learning_rate", type=float, default=0.1, 
                         help="Learning rate")
@@ -58,7 +62,11 @@ def parse_arguments():
                         help="If adaptive is true, it specifies the max mutation power reachable")
     parser.add_argument("--fitness_sharing", action="store_true",
                         help="If true, reduce Genetic Drift with the Niching technique of fitness sharing")
-    parser.add_argument("--ES_model_to_test", type=str, default=None,
+    parser.add_argument("--ES_model_to_test_agent_0", type=str, default=None,
+                        help="If testing ES, choose the model to test from CLI")
+    parser.add_argument("--ES_model_to_test_agent_1", type=str, default=None,
+                        help="If testing ES, choose the model to test from CLI")
+    parser.add_argument("--ES_model_to_test_adversary_0", type=str, default=None,
                         help="If testing ES, choose the model to test from CLI")
     parser.add_argument("--GA_hof_to_test", type=str, default=None,
                         help="If testing GA, choose the model to test from CLI")
@@ -66,6 +74,15 @@ def parse_arguments():
                         help="If true, the model plays against itself. If false, it plays against a dummy (RandomPolicy)")
     parser.add_argument("--average_window", type=int, default=None,
                         help="Choose the window for the running average")
+    parser.add_argument("--early_stopping", action="store_true",
+                        help="Enable Early Stopping")
+    parser.add_argument("--patience", type=int, default=300,
+                        help="Choose how many epochs to wait without improvements before stopping")
+    parser.add_argument("--min_delta", type=float, default=0.1,
+                        help="Choose the minimum amount of improvement that should be considered as relevant")
+    #parser.add_argument("--adversary", type=str, default="Random",
+                        #help="If MPE simple adversary game is chosen, choose the adversary policy")
+
 
     return parser.parse_args()
 
@@ -80,7 +97,9 @@ class Args:
         self.population = args.population
         self.hof_size = args.hof_size
         self.game = args.game
-        self.mutation_power = args.initial_mutation_power
+        self.mutation_power_agent_0 = args.initial_mutation_power_agent_0
+        self.mutation_power_agent_1 = args.initial_mutation_power_agent_1
+        self.mutation_power_adversary = args.initial_mutation_power_adversary
         self.learning_rate = args.learning_rate
         self.max_timesteps_per_episode = args.max_timesteps_per_episode
         self.max_evaluation_steps = args.max_evaluation_steps
@@ -89,6 +108,10 @@ class Args:
         self.max_mutation_power = args.max_mutation_power
         self.min_mutation_power = args.min_mutation_power
         self.fitness_sharing = args.fitness_sharing
+        self.early_stopping = args.early_stopping
+        self.patience = args.patience
+        self.min_delta = args.min_delta
+        #self.adversary = args.adversary
 
         # clearly, these are not hyperparam, but it's easy to have everything inside an object
         self.debug = args.debug
@@ -98,7 +121,9 @@ class Args:
         self.env_mode = args.env_mode
         self.precision = args.precision
         self.save = args.save
-        self.ES_model_to_test = args.ES_model_to_test
+        self.ES_model_to_test_agent_0 = args.ES_model_to_test_agent_0
+        self.ES_model_to_test_agent_1 = args.ES_model_to_test_agent_1
+        self.ES_model_to_test_adversary_0 = args.ES_model_to_test_adversary_0
         self.GA_hof_to_test = args.GA_hof_to_test
         self.play_against_yourself = args.play_against_yourself
         if args.average_window != None:
@@ -122,7 +147,10 @@ class Args:
                                 if attr != "play_against_yourself" or args.test:
                                     if (attr != "max_evaluation_steps" and attr != "max_timesteps_per_episode") or args.game != "simple_adversary_v3":
                                         if attr not in ["max_mutation_power", "min_mutation_power"] or args.adaptive:
-                                            print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                                            if attr not in ["patience", "min_delta"] or args.early_stopping:
+                                                if attr != "adversary" or args.game == "simple_adversary_v3":
+                                                    if attr not in ["ES_model_to_test_agent_0", "ES_model_to_test_agent_1", "ES_model_to_test_adversary_0"] or not args.test:
+                                                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
 def main():
@@ -145,7 +173,7 @@ def main():
         if args.algorithm == "GA":
             hof = genetic_algorithm_train(env, env.agents[0], args, output_dir)
         elif args.algorithm == "ES":
-            agent = evolution_strategy_train(env, env.agents[0], args, output_dir)
+            agent_0, agent_1, adversary = evolution_strategy_train(env, args, output_dir)
         else:
             print("Unknown algorithm. Exiting.")
             return
@@ -161,29 +189,34 @@ def main():
         
         env = initialize_env(args)
 
-        agent = load_agent_for_testing(args, env)
-        print(f"agent = {agent}")
+        agent_0, agent_1, adversary = load_agent_for_testing(args, env)
 
         total_rewards = 0
         test_episodes = 10
 
         if args.game == "simple_adversary_v3": # cooperative task
     
-            total_rewards1 = 0
-            total_reward2 = 0
+            total_reward_agent_0 = 0
+            total_reward_agent_1 = 0
+            total_reward_adversary = 0
 
             for episode in range(test_episodes):
 
-                reward1, reward2 = play_game(env=env, player1=agent.model,
-                                                            player2=agent.model,
-                                                            args=args, eval=True)
-                total_rewards1 += reward1
-                total_reward2 += reward2
+                player2 = RandomPolicy(env.action_space(env.agents[0]).n) 
 
-            avg_reward1 = total_rewards1 / test_episodes
-            avg_reward2 = total_reward2 / test_episodes
+                reward_agent_0, reward_agent_1, reward_adversary = play_game(env=env, player1=agent_0.model,
+                                                    player2=agent_1.model, adversary=adversary.model,
+                                                    args=args, eval=True)
 
-            print(f"\n Average Reward over {test_episodes}: {avg_reward1} and {avg_reward2}")
+                total_reward_agent_0 += reward_agent_0 
+                total_reward_agent_1 += reward_agent_1
+                total_reward_adversary += reward_adversary
+
+            avg_reward_agent_0 = total_reward_agent_0 / test_episodes
+            avg_reward_agent_1 = total_reward_agent_1 / test_episodes
+            avg_reward_adversary = total_reward_adversary / test_episodes
+
+            print(f"\n Average Reward over {test_episodes}: agent_0 with {avg_reward_agent_0}, agent_1 with {avg_reward_agent_1}, adversary with {avg_reward_adversary}")
 
         else: 
             

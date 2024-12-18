@@ -8,7 +8,7 @@ class RandomPolicy(object):
     def __init__(self, number_actions):
         self.number_actions = number_actions
 
-    def determine_action(self, input):
+    def determine_action(self, input, args):
         return randint(0, self.number_actions - 1)
 
 
@@ -22,7 +22,7 @@ class PeriodicPolicy(object):
         self.actions = np.arange(self.number_actions)
         self.counter = 0
         
-    def determine_action(self, input):
+    def determine_action(self, input, args):
         chosen_action = self.actions[self.counter]
         self.counter = (self.counter + 1) % self.number_actions 
         return chosen_action
@@ -35,5 +35,5 @@ class AlwaysFirePolicy(object):
     def __init__(self, number_actions):
         return
         
-    def determine_action(self, input):
+    def determine_action(self, input, args):
         return 1

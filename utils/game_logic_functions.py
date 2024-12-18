@@ -55,9 +55,9 @@ def initialize_env(args):
     return env
 
 
-def create_agent(env, args):
+def create_agent(env, args, role=None):
     if args.game == "simple_adversary_v3":
-        return MPEAgent(env, args)
+        return MPEAgent(env, args, role)
     elif args.game == "pong_v3" or args.game == "boxing_v2":
         return AtariAgent(env, args)
     else:
@@ -73,7 +73,6 @@ def preprocess_observation(obs, args):
         obs = obs.to(torch.float32)
 
     if args.game == "simple_adversary_v3":
-        # TODO
         pass
     else:  # atari games, that deal with images
         obs = obs.permute(2, 0, 1)
@@ -82,7 +81,7 @@ def preprocess_observation(obs, args):
 
 
 
-def play_atari(player1, player2, args):
+def play_atari(env, player1, player2, args):
 
     rewards = {"first_0": 0, "second_0": 0}
     timesteps = 0
@@ -96,9 +95,9 @@ def play_atari(player1, player2, args):
         obs = preprocess_observation(obs, args)
         
         if agent == "first_0":
-            action = player1.determine_action(obs)
+            action = player1.determine_action(obs, args)
         elif agent == "second_0":
-            action = player2.determine_action(obs)  
+            action = player2.determine_action(obs, args)  
         else:
             raise ValueError(f"Unknown Agent during play_game: {agent}")
         
@@ -121,7 +120,7 @@ def play_atari(player1, player2, args):
 
 
 
-def play_MPE(env, player1, player2, adversary, args):
+def play_MPE(env, player1, player2, adversary, args, eval):
 
     rewards = {"agent_0": 0, "agent_1": 0, "adversary_0": 0}
     timesteps = 0
@@ -130,30 +129,84 @@ def play_MPE(env, player1, player2, adversary, args):
 
     for agent in env.agent_iter():
 
+        # if eval:
+        #     print(f"\nagent = {agent}")
+
+        if args.debug:
+            print(f"\nfor {agent}:")
+
         obs = env.observe(agent)
 
+        if args.debug:
+            print(f"\n\t obs = {obs}")
+    
+        action = None
+
         obs = preprocess_observation(obs, args)
+
+        # if eval:
+        #     print(f"\n obs = {obs}")
+        
+        
         if agent == "agent_0":
-            action = player1.determine_action(obs)
+            action = player1.determine_action(obs, args)
         elif agent == "agent_1":
-            action = player2.determine_action(obs)  
+            action = player2.determine_action(obs, args)  
         elif agent == "adversary_0":
-            action, _, _ = adversary.get_action_and_value(obs)
+
+            """
+            if args.adversary == "PPO":
+                action, _, _ = adversary.get_action_and_value(obs)
+            elif args.adversary == "Random":
+                action = adversary.determine_action(obs, args)
+            """
+            action = adversary.determine_action(obs, args)
+
         else:
             raise ValueError(f"Unknown Agent during play_game: {agent}")
         
+
+        if args.debug:
+            print(f"\n\t action chosen = {action}")
+
+        if action == -1:
+            print("\nthe action is -1, I don't know why")
+            print(f"\nobs = {obs}")
+
+        if action > 4:
+            raise ValueError(f"ERROR: the action {action} is greater than 4")
+
         env.step(action)    
         
         _, reward, termination, truncation, _ = env.last()
+
+
+        # if eval:
+        #     print(f"\n reward = {reward}")
+
+        if args.debug:
+            print(f"\n\t reward = {reward}, termination = {termination}, truncation = {truncation}")
         
         rewards[agent] += reward
+
+        if args.debug:
+            print(f"\n\t total reward of the agent = {rewards[agent]}")
         
         timesteps += 1
     
         if timesteps_limit is not None and timesteps >= timesteps_limit:
+            
+            # if eval:
+            #     print("times'up")
+           
             break
 
         if termination or truncation:
+
+
+            # if eval:
+            #     print("termination or truncation")
+
             break
          
     return rewards["agent_0"], rewards["agent_1"], rewards["adversary_0"]
@@ -164,13 +217,13 @@ def play_game(env, player1, player2, adversary=None, args=None, eval=False):
     env.reset()
 
     if args.game == "simple_adversary_v3":
-        if adversary is None:
-            adversary = PPOPolicy(env.observation_space("adversary_0").shape[0], env.action_space("adversary_0").n).to("cpu")
-            adversary.load_state_dict(torch.load("model_adversary_0.pth", map_location="cpu"))
-            adversary.eval()
-        rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args)
-        return rw_p1, rw_p2
+
+        if adversary is not None:
+            rw_p1, rw_p2, rw_adv = play_MPE(env, player1, player2, adversary, args, eval)
+            return rw_p1, rw_p2, rw_adv
+        else:
+            raise ValueError("adversary not specified")
     else:
-        rw_p1, rw_p2 = play_atari(env, player1, player2, args) 
+        rw_p1, rw_p2 = play_atari(env, player1, player2, args, eval) 
         return rw_p1, rw_p2
     
