@@ -50,15 +50,15 @@ def mutate_elites(env, elites, args, role):
 
 def genetic_algorithm_train(env, agent, args, output_dir):
  
-    hof_file_agent_0 = os.path.join(output_dir, "hall_of_fame.pth")
-    elite_file_agent_0 = os.path.join(output_dir, "elite_weights.pth")
-    results_plot_file_agent_0 = os.path.join(output_dir, "results_plot.png")
-    hof_file_agent_1 = os.path.join(output_dir, "hall_of_fame.pth")
-    elite_file_agent_1 = os.path.join(output_dir, "elite_weights.pth")
-    results_plot_file_agent_1 = os.path.join(output_dir, "results_plot.png")
-    hof_file_adversary = os.path.join(output_dir, "hall_of_fame.pth")
-    elite_file_adversary = os.path.join(output_dir, "elite_weights.pth")
-    results_plot_file_adversary = os.path.join(output_dir, "results_plot.png")
+    hof_file_agent_0 = os.path.join(output_dir, "hall_of_fame_agent_0.pth")
+    elite_file_agent_0 = os.path.join(output_dir, "elite_weights_agent_0.pth")
+    results_plot_file_agent_0 = os.path.join(output_dir, "results_agent_0._plot.png")
+    hof_file_agent_1 = os.path.join(output_dir, "hall_of_fame_agent_1.pth")
+    elite_file_agent_1 = os.path.join(output_dir, "elite_weights_agent_1.pth")
+    results_plot_file_agent_1 = os.path.join(output_dir, "results_agent_1_plot.png")
+    hof_file_adversary = os.path.join(output_dir, "hall_of_fame_adversary.pth")
+    elite_file_adversary = os.path.join(output_dir, "elite_weights_adversary.pth")
+    results_plot_file_adversary = os.path.join(output_dir, "results_adversary_plot.png")
 
     hof_agent_1 = [create_agent(env, args, "agent_1") for _ in range(args.hof_size)]
     hof_agent_0 = [create_agent(env, args,  "agent_0") for _ in range(args.hof_size)]
@@ -293,10 +293,10 @@ def genetic_algorithm_train(env, agent, args, output_dir):
         if args.save:
             save_model(hof_agent_0, hof_file_agent_0)
             save_model(elites_agent_0, elite_file_agent_0)
-            save_model(hof_agent_0, hof_file_agent_0)
-            save_model(elites_agent_0, elite_file_agent_0)
-            save_model(hof_agent_0, hof_file_agent_0)
-            save_model(elites_agent_0, elite_file_agent_0)
+            save_model(hof_agent_1, hof_file_agent_1)
+            save_model(elites_agent_1, elite_file_agent_1)
+            save_model(hof_adversary, hof_file_adversary)
+            save_model(elites_adversary, elite_file_adversary)
 
         evaluation_reward_agent_0, evaluation_reward_agent_1, evaluation_reward_adversary = evaluate_current_weights(best_agent_0, best_agent_1, best_adversary, env, args=args)
 
