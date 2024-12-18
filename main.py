@@ -68,8 +68,12 @@ def parse_arguments():
                         help="If testing ES, choose the model to test from CLI")
     parser.add_argument("--ES_model_to_test_adversary_0", type=str, default=None,
                         help="If testing ES, choose the model to test from CLI")
-    parser.add_argument("--GA_hof_to_test", type=str, default=None,
-                        help="If testing GA, choose the model to test from CLI")
+    parser.add_argument("--GA_hof_to_test_agent_0", type=str, default=None,
+                        help="If testing GA, choose the agent 0 model to test from CLI")
+    parser.add_argument("--GA_hof_to_test_agent_1", type=str, default=None,
+                        help="If testing GA, choose the agent 1 model  to test from CLI")
+    parser.add_argument("--GA_hof_to_test_adversary", type=str, default=None,
+                        help="If testing GA, choose the adversary model  to test from CLI")
     parser.add_argument("--play_against_yourself", action="store_true",
                         help="If true, the model plays against itself. If false, it plays against a dummy (RandomPolicy)")
     parser.add_argument("--average_window", type=int, default=None,
@@ -124,7 +128,9 @@ class Args:
         self.ES_model_to_test_agent_0 = args.ES_model_to_test_agent_0
         self.ES_model_to_test_agent_1 = args.ES_model_to_test_agent_1
         self.ES_model_to_test_adversary_0 = args.ES_model_to_test_adversary_0
-        self.GA_hof_to_test = args.GA_hof_to_test
+        self.GA_hof_to_test_agent_0 = args.GA_hof_to_test_agent_0
+        self.GA_hof_to_test_agent_1 = args.GA_hof_to_test_agent_1
+        self.GA_hof_to_test_adversary = args.GA_hof_to_test_adversary
         self.play_against_yourself = args.play_against_yourself
         if args.average_window != None:
             if args.average_window > args.generations:
@@ -149,8 +155,9 @@ class Args:
                                         if attr not in ["max_mutation_power", "min_mutation_power"] or args.adaptive:
                                             if attr not in ["patience", "min_delta"] or args.early_stopping:
                                                 if attr != "adversary" or args.game == "simple_adversary_v3":
-                                                    if attr not in ["ES_model_to_test_agent_0", "ES_model_to_test_agent_1", "ES_model_to_test_adversary_0"] or not args.test:
-                                                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                                                    if attr not in ["ES_model_to_test_agent_0", "ES_model_to_test_agent_1", "ES_model_to_test_adversary_0"] or (args.test and args.algorithm == "ES"):
+                                                        if attr not in ["GA_hof_to_test_agent_0", "GA_hof_to_test_agent_1", "GA_hof_to_test_adversary"] or (args.test and args.algorithm == "GA"):
+                                                            print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
 def main():
@@ -171,9 +178,9 @@ def main():
         env = initialize_env(args)
 
         if args.algorithm == "GA":
-            hof = genetic_algorithm_train(env, env.agents[0], args, output_dir)
+            genetic_algorithm_train(env, env.agents[0], args, output_dir)
         elif args.algorithm == "ES":
-            agent_0, agent_1, adversary = evolution_strategy_train(env, args, output_dir)
+            evolution_strategy_train(env, args, output_dir)
         else:
             print("Unknown algorithm. Exiting.")
             return
@@ -189,21 +196,19 @@ def main():
         
         env = initialize_env(args)
 
-        agent_0, agent_1, adversary = load_agent_for_testing(args, env)
-
         total_rewards = 0
         test_episodes = 10
 
         if args.game == "simple_adversary_v3": # cooperative task
+            
+            agent_0, agent_1, adversary = load_agent_for_testing(args, env)
     
             total_reward_agent_0 = 0
             total_reward_agent_1 = 0
             total_reward_adversary = 0
 
             for episode in range(test_episodes):
-
-                player2 = RandomPolicy(env.action_space(env.agents[0]).n) 
-
+                
                 reward_agent_0, reward_agent_1, reward_adversary = play_game(env=env, player1=agent_0.model,
                                                     player2=agent_1.model, adversary=adversary.model,
                                                     args=args, eval=True)
@@ -221,6 +226,8 @@ def main():
         else: 
             
             # atari game
+            
+            agent = load_agent_for_testing(args, env)
             
             total_rewards = 0
 

@@ -51,7 +51,7 @@ def initialize_env(args):
         env = resize_v1(env, 84, 84)
         env = frame_stack_v1(env, 4)
         env = agent_indicator_v0(env)
-    env.reset(seed=1938214)
+    env.reset(seed=1870300)
     return env
 
 

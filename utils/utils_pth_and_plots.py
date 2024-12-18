@@ -6,24 +6,39 @@ from utils.game_logic_functions import create_agent
 
 
 def load_agent_for_testing(args, env=None):
-
+    
     if args.algorithm == "GA":
 
-        if args.GA_hof_to_test is None:
-            print(f"Error: HoF file not specified. Please specify the HoF to test")
+        if args.GA_hof_to_test_agent_0 is None:
+            raise ValueError(f"Error: Model file for agent_0 not specified. Please specify the agent to test")
             return
-            
-        if not os.path.exists(args.GA_hof_to_test):
-            print(f"Error: Model file {args.GA_hof_to_test} not found.")
+        
+        if args.GA_hof_to_test_agent_1 is None:
+            raise ValueError(f"Error: Model file for agent_1 not specified. Please specify the agent to test")
+            return
+        
+        if args.GA_hof_to_test_adversary is None:
+            raise ValueError(f"Error: Model file for adversary_0 not specified. Please specify the agent to test")
             return
 
-        print(f"Loading HoF from {args.GA_hof_to_test} for testing...")
-        hof = torch.load(args.GA_hof_to_test)
-        best_model_weights = hof[-1].get_weights()
-        agent = create_agent(env, args)
-        agent.set_weights(best_model_weights)
+        if not os.path.exists(args.GA_hof_to_test_agent_0):
+            raise ValueError(f"Error: Model file {args.GA_hof_to_test_agent_0} not found.")
+            return
 
-        return agent
+        if not os.path.exists(args.GA_hof_to_test_agent_1):
+            raise ValueError(f"Error: Model file {args.GA_hof_to_test_agent_1} not found.")
+            return
+
+        if not os.path.exists(args.GA_hof_to_test_adversary):
+            raise ValueError(f"Error: Model file {args.GA_hof_to_test_adversary} not found.")
+            return
+
+        print(f"Loading Agents for testing...")
+        hof_0 = torch.load(args.GA_hof_to_test_agent_0)
+        hof_1 = torch.load(args.GA_hof_to_test_agent_1)
+        hof_adversary = torch.load(args.GA_hof_to_test_adversary)
+        
+        return hof_0[-1], hof_1[-1], hof_adversary[-1]
 
     elif args.algorithm == "ES":
 
