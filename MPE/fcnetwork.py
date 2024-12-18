@@ -157,7 +157,7 @@ class FCNetwork(nn.Module):
 
 
     def get_weights_ES(self, layers=None):
-        """ Retrieve all the weights of the network. (For ES)"""
+        """ Retrieve all the weights of the network. (Actually, this is not used only for ES)"""
         layers = layers if layers else self.layers
         #print(f"layers = {layers}")
 

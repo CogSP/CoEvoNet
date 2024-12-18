@@ -5,7 +5,7 @@ python3.9 main.py \
     --train \
     --save \
     --generations=500 \
-    --population=200 \
+    --population=20 \
     --hof_size=3 \
     --elites_number=5 \
     --precision=float32 \
@@ -18,3 +18,4 @@ python3.9 main.py \
     --adaptive \
     --max_mutation_power=0.7 \
     --min_mutation_power=0.0001 \
+    --fitness_sharing

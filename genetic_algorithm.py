@@ -32,10 +32,19 @@ def evaluate_current_weights(agent_0, agent_1, adversary, env, args):
 def mutate_elites(env, elites, args, role):
     mutated_elites_list = []
     for i in range(args.population-1):
+        
+        if role == 'agent_0':
+            mutation_power = args.mutation_power_agent_0
+        elif role == 'agent_1':
+            mutation_power = args.mutation_power_agent_1
+        else:
+            mutation_power = args.mutation_power_adversary
+            
         elite = elites[i % args.elites_number]
         mutated_elite = elite.clone(env, args, role)
-        mutated_elite.mutate(args.mutation_power)
-        mutated_elites_list.append(mutated_elite)
+        mutated_elite.mutate(mutation_power)
+        mutated_elites_list.append(mutated_elite)   
+         
     return mutated_elites_list
 
 
@@ -118,6 +127,11 @@ def genetic_algorithm_train(env, agent, args, output_dir):
             agent_0_reward = 0
 
             individual_agent_0 = population_agent_0[i]
+            
+            population_weights_agent_0 = [population_agent_0[i].model.get_weights_ES() for i in range(len(population_agent_0))]
+            
+            diversity_agent_0 = diversity_penalty(individual_weights=agent_0.model.get_weights_ES(), population_weights=population_weights_agent_0, args=args)
+            
 
             for k in tqdm(range(args.hof_size), desc=f"Individual n.{i} vs HoF elite", leave=False):
                 
@@ -127,12 +141,14 @@ def genetic_algorithm_train(env, agent, args, output_dir):
                                                                                     player2=hof_elite_member_agent_1.model,
                                                                                     adversary=hof_elite_member_adversary.model, args=args)
                 
-            agent_0_reward_fitness = agent_0_reward / args.hof_size
+            total_agent_0_reward = agent_0_reward / args.hof_size
+            
+            total_agent_0_fitness = total_agent_0_reward / (1 + diversity_agent_0)
             
             if args.debug:
-                print(f"\nindividual has fitness {agent_0_reward_fitness}")
+                print(f"\nindividual has fitness {total_agent_0_fitness}")
                                 
-            population_fitness_agent_0.append(agent_0_reward_fitness)
+            population_fitness_agent_0.append(total_agent_0_fitness)
     
         if args.debug:
             print(f"\npopulation_fitness = {population_fitness_agent_0}")
@@ -143,6 +159,11 @@ def genetic_algorithm_train(env, agent, args, output_dir):
             agent_1_reward = 0
 
             individual_agent_1 = population_agent_1[i]
+            
+            population_weights_agent_1 = [population_agent_1[i].model.get_weights_ES() for i in range(len(population_agent_1))]
+            
+            diversity_agent_1 = diversity_penalty(individual_weights=agent_1.model.get_weights_ES(), population_weights=population_weights_agent_1, args=args)
+            
 
             for k in tqdm(range(args.hof_size), desc=f"Individual n.{i} vs HoF elite", leave=False):
                 
@@ -152,12 +173,15 @@ def genetic_algorithm_train(env, agent, args, output_dir):
                                                                                     player2=individual_agent_1.model,
                                                                                     adversary=hof_elite_member_adversary.model, args=args)
                 
-            agent_1_reward_fitness = agent_1_reward / args.hof_size
+            total_agent_1_reward = agent_1_reward / args.hof_size
+            
+            total_agent_1_fitness = total_agent_1_reward / (1 + diversity_agent_1)
+            
             
             if args.debug:
-                print(f"\nindividual has fitness {agent_1_reward_fitness}")
+                print(f"\nindividual has fitness {total_agent_1_fitness}")
                                 
-            population_fitness_agent_1.append(agent_1_reward_fitness)
+            population_fitness_agent_1.append(total_agent_1_fitness)
     
         if args.debug:
             print(f"\npopulation_fitness = {population_fitness_agent_1}")
@@ -168,7 +192,11 @@ def genetic_algorithm_train(env, agent, args, output_dir):
 
             adversary_reward = 0
 
-            individual_agent_adversary = population_adversary[i]
+            individual_adversary = population_adversary[i]
+            
+            population_weights_adversary = [population_adversary[i].model.get_weights_ES() for i in range(len(population_adversary))]
+            
+            diversity_adversary = diversity_penalty(individual_weights=adversary.model.get_weights_ES(), population_weights=population_weights_adversary, args=args)
 
             for k in tqdm(range(args.hof_size), desc=f"Individual n.{i} vs HoF elite", leave=False):
                 
@@ -176,17 +204,20 @@ def genetic_algorithm_train(env, agent, args, output_dir):
                 hof_elite_member_agent_1 = hof_agent_0[len(hof_agent_1)-1-k]
                 agent_0_reward, agent_1_reward, adversary_reward = play_game(env=env, player1=hof_elite_member_agent_0.model, 
                                                                                     player2=hof_elite_member_agent_1.model,
-                                                                                    adversary=individual_agent_adversary.model, args=args)
+                                                                                    adversary=individual_adversary.model, args=args)
                 
-            adversary_reward_fitness = adversary_reward / args.hof_size
+            total_adversary_reward = adversary_reward / args.hof_size
+            
+            total_adversarry_fitness = total_adversary_reward / (1 + diversity_adversary)
+            
             
             if args.debug:
-                print(f"\nindividual has fitness {adversary_reward_fitness}")
+                print(f"\nindividual has fitness {total_adversarry_fitness}")
                                 
-            population_fitness_adversary.append(adversary_reward_fitness)
+            population_fitness_adversary.append(total_adversarry_fitness)
     
         if args.debug:
-            print(f"\npopulation_fitness = {adversary_reward_fitness}")
+            print(f"\npopulation_fitness = {total_adversarry_fitness}")
         
 
         ordered_population_fitness_agent_0 = np.argsort(population_fitness_agent_0)[::-1]
