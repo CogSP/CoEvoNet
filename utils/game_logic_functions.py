@@ -73,7 +73,6 @@ def preprocess_observation(obs, args):
         obs = obs.to(torch.float32)
 
     if args.game == "simple_adversary_v3":
-        # TODO: if obs normalization works for PPO, put it also for genetic algo
         pass
     else:  # atari games, that deal with images
         obs = obs.permute(2, 0, 1)

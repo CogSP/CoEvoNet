@@ -149,7 +149,8 @@ class Args:
                                         if attr not in ["max_mutation_power", "min_mutation_power"] or args.adaptive:
                                             if attr not in ["patience", "min_delta"] or args.early_stopping:
                                                 if attr != "adversary" or args.game == "simple_adversary_v3":
-                                                    print(f"{attr.replace('_', ' ').capitalize()}: {value}")
+                                                    if attr not in ["ES_model_to_test_agent_0", "ES_model_to_test_agent_1", "ES_model_to_test_adversary_0"] or not args.test:
+                                                        print(f"{attr.replace('_', ' ').capitalize()}: {value}")
 
 
 def main():

@@ -68,8 +68,6 @@ def save_model(obj, file_path):
 def create_output_dir(args):
     """Create a directory for saving models and plots."""
 
-    # TODO: add mutation power
-
     dir_name = f"{args.algorithm}_models/gens{args.generations}_pop{args.population}_hof{args.hof_size}_game{args.game}_tslimit{args.max_timesteps_per_episode}_fitness-sharing{args.fitness_sharing}_adaptive{args.adaptive}"
     if args.adaptive:
         dir_name += f"max_mutation{args.max_mutation_power}_min_mutation{args.min_mutation_power}"
@@ -125,13 +123,13 @@ def plot_weights_logging(file_path, weights_logging_agent_0, weights_logging_age
 
     # Plot for each agent/adversary
     plot_data(weights_logging_agent_0, 
-              "Weight Statistics Over Steps (Agent 0)", 
+              "Weight Statistics Over Generations (Agent 0)", 
               f"{file_path}_agent_0.png")
     plot_data(weights_logging_agent_1, 
-              "Weight Statistics Over Steps (Agent 1)", 
+              "Weight Statistics Over Generations (Agent 1)", 
               f"{file_path}_agent_1.png")
     plot_data(weights_logging_adversary, 
-              "Weight Statistics Over Steps (Adversary)", 
+              "Weight Statistics Over Generations (Adversary)", 
               f"{file_path}_adversary.png")
 
 

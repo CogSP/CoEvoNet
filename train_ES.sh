@@ -5,9 +5,9 @@ python3.9 main.py \
     --train \
     --save \
     --generations=500 \
-    --population=30 \
+    --population=20 \
     --hof_size=1 \
-    --precision=float32 \
+    --precision=float16 \
     --game=simple_adversary_v3 \
     --max_timesteps_per_episode=400 \
     --max_evaluation_steps=400 \

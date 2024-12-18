@@ -316,7 +316,6 @@ def evolution_strategy_train(env, args, output_dir):
             mutation_power_history_adversary.append(args.mutation_power_adversary)
 
 
-        
         # Check for improvement for early stopping
         if args.early_stopping:
             # If the improvement is larger than min_delta, reset no_improvement_count
