@@ -54,11 +54,6 @@ The framework supports the following PettingZoo Games:
 - pong_v3 and boxing_v2: Competitive Atari-based tasks.
 
 
-# Results
-TODO
-<!--![rewards_plot](https://github.com/user-attachments/assets/7a623fbb-f87b-4cad-81e3-1dc12e4f51f1)-->
-
-
 # References
 
 - "A coevolutionary approach to deep multi-agent reinforcement learning",
